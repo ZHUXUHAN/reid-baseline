@@ -48,7 +48,8 @@ def create_supervised_trainer(model, optimizer, loss_fn, aligned_train, pcb_trai
             score, feat, local_feat = model(img)
             loss = loss_fn(score, feat, target, None, local_feat)
         elif pcb_train:
-            score, feat, local_score, local_feat = model(img)
+
+            score, feat, local_score, local_feat = model(img, None)
             loss = loss_fn(score, feat, target, local_score, local_feat)
         else:
             score, feat = model(img)
@@ -63,7 +64,7 @@ def create_supervised_trainer(model, optimizer, loss_fn, aligned_train, pcb_trai
 
 def create_supervised_trainer_with_center(model, center_criterion, optimizer, optimizer_center, loss_fn,
                                           cetner_loss_weight,
-                                          aligned_train, pcb_train, mgn_train, device=None):
+                                          aligned_train, pcb_train, mgn_train, arc_train, device=None):
     """
     Factory function for creating a trainer for supervised models
 
@@ -94,7 +95,11 @@ def create_supervised_trainer_with_center(model, center_criterion, optimizer, op
             score, feat, local_feat = model(img)
             loss = loss_fn(score, feat, target, None, local_feat)
         elif pcb_train:
-            score, feat, local_score, local_feat = model(img)
+            if arc_train:
+                score, feat, local_score, local_feat = model(img, target)
+            else:
+                score, feat, local_score, local_feat = model(img, None)
+
             loss = loss_fn(score, feat, target, local_score, local_feat)
         elif mgn_train:
             score, feat, local_feat = model(img)
@@ -262,12 +267,13 @@ def do_train_with_center(
     mgn_train = cfg.MODEL.MGN
     aligned_train = cfg.MODEL.ALIGNED
     pcb_train = cfg.MODEL.PCB
+    arc_train = cfg.MODEL.ARC
 
 
     logger = logging.getLogger("reid_baseline.train")
     logger.info("Start training")
     trainer = create_supervised_trainer_with_center(model, center_criterion, optimizer, optimizer_center, loss_fn,
-                                                    cfg.SOLVER.CENTER_LOSS_WEIGHT, aligned_train, pcb_train, mgn_train, device=device)
+                                                    cfg.SOLVER.CENTER_LOSS_WEIGHT, aligned_train, pcb_train, mgn_train, arc_train,device=device)
     # evaluator = create_supervised_evaluator(model, metrics={'r1_mAP': R1_mAP(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)}, device=device)
     checkpointer = ModelCheckpoint(output_dir, cfg.MODEL.NAME, checkpoint_period, n_saved=10, require_empty=False)
     timer = Timer(average=True)
