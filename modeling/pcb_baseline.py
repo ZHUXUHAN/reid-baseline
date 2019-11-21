@@ -232,7 +232,7 @@ class PCBBaseline(nn.Module):
 
                 self.bottleneck_list.append(bottleneck)
 
-    def forward(self, x):
+    def forward(self, x, label):
         global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
