@@ -37,12 +37,13 @@ def create_supervised_evaluator(model, aligned_test, pcb_test, metrics,
             data = data.to(device) if torch.cuda.device_count() >= 1 else data
             data_flip = data_flip.to(device) if torch.cuda.device_count() >= 1 else data_flip
             if aligned_test or pcb_test:
-                feat, local_feat = model(data)
-                flip_feat, flip_local_feat = model(data_flip)
+                feat, local_feat = model(data, None)
+                flip_feat, flip_local_feat = model(data_flip, None)
                 return feat, local_feat, pids, camids, flip_feat, flip_local_feat
             else:
                 feat = model(data)
-                return feat, pids, camids
+                flip_feat = model(data_flip)
+                return feat, pids, camids, flip_feat
 
     engine = Engine(_inference)
 
@@ -67,6 +68,7 @@ def inference(
     qqdist_path = cfg.TEST.SAVE_DIST_QQ
     qgdist_path = cfg.TEST.SAVE_DIST_QG
     savedist_path = [ggdist_path, qqdist_path, qgdist_path]
+    merge = cfg.TEST.MERGE
 
     logger = logging.getLogger("reid_baseline.inference")
     logger.info("Enter inferencing")
@@ -76,7 +78,7 @@ def inference(
                                                 device=device)
     elif cfg.TEST.RE_RANKING == 'yes':
         print("Create evaluator for reranking")
-        evaluator = create_supervised_evaluator(model, aligned_test, pcb_test, metrics={'r1_mAP': R1_mAP_reranking(num_query, datasets, aligned_test, pcb_test, adjust_rerank, savedist_path, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)},
+        evaluator = create_supervised_evaluator(model, aligned_test, pcb_test, metrics={'r1_mAP': R1_mAP_reranking(num_query, datasets, aligned_test, pcb_test, adjust_rerank, savedist_path, merge, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)},
                                                 device=device)
     else:
         print("Unsupported re_ranking config. Only support for no or yes, but got {}.".format(cfg.TEST.RE_RANKING))
