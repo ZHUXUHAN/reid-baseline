@@ -186,6 +186,8 @@ _C.TEST.SAVE_DIST_QQ = './test_dist/qq'
 
 _C.TEST.SAVE_DIST_GG = './test_dist/gg'
 
+_C.TEST.MERGE = False
+
 
 
 
