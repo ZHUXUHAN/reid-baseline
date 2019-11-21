@@ -32,27 +32,25 @@ class RandomIdentitySampler(Sampler):
         self.num_pids_per_batch = self.batch_size // self.num_instances
         self.index_dic = defaultdict(list)
 
-        _pids = []
-        _pids_100 = []
-        with open('./data/samplers/number.txt', 'r') as f:
-            _pids_list = eval(f.readline().strip())
-        for i in range(len(_pids_list)):
-            _pids.append(int(_pids_list[i]))
-
-        with open('./data/samplers/number_more100.txt', 'r') as f:
-            _pids_100_list = eval(f.readline().strip())
-        for i in range(len(_pids_100_list)):
-            _pids_100.append(int(_pids_100_list[i]))
+        # self._pids_less100 = self.parse_data_file('./data/samplers/number_less100.txt')
+        # self._pids_more100 = self.parse_data_file('./data/samplers/number_more100.txt')
+        # self._pid_less4 = self.parse_data_file('./data/samplers/number_less4.txt')
+        # self._pid_more4less10 = self.parse_data_file('./data/samplers/number_more4less10.txt')
 
         with open('./data/samplers/data.json', 'r') as f:
             self.data = json.load(f)
 
-        self._pids_100 = _pids_100
-        self._pids = _pids
-
         for index, (_, pid, _) in enumerate(self.data_source):
-            if pid in self._pids:
-                self.index_dic[pid].append(index)
+            # if pid in self._pids:
+            #     self.index_dic[pid].append(index)
+            # if pid in self._pid_less4:
+            #     self.index_dic[pid].append(index)
+            #     self.index_dic[pid].append(index)
+            #     self.index_dic[pid].append(index)
+            #     self.index_dic[pid].append(index)
+            # elif pid in self._pid_more4less10:
+            #     self.index_dic[pid].append(index)
+            #     self.index_dic[pid].append(index)
             self.index_dic[pid].append(index)
         self.pids = list(self.index_dic.keys())
 
@@ -65,6 +63,14 @@ class RandomIdentitySampler(Sampler):
                 num = self.num_instances
             self.length += num - num % self.num_instances
 
+    def parse_data_file(self, data_path):
+        _pids = []
+        with open(data_path, 'r') as f:
+            _pids_list = eval(f.readline().strip())
+        for i in range(len(_pids_list)):
+            _pids.append(int(_pids_list[i]))
+        return _pids
+
     def __iter__(self):
         batch_idxs_dict = defaultdict(list)
 
@@ -72,9 +78,9 @@ class RandomIdentitySampler(Sampler):
             idxs = copy.deepcopy(self.index_dic[pid])
             if len(idxs) < self.num_instances:
                 idxs = np.random.choice(idxs, size=self.num_instances, replace=True)
-            # elif len(idxs) > self.num_instances and len(idxs) % self.num_instances != 0:
-            #     idxs = np.random.choice(idxs, size=len(idxs) + self.num_instances - (len(idxs) % self.num_instances),
-            #                             replace=True)
+            elif len(idxs) > self.num_instances and len(idxs) % self.num_instances != 0:
+                idxs = np.random.choice(idxs, size=len(idxs) + self.num_instances - (len(idxs) % self.num_instances),
+                                        replace=True)
             random.shuffle(idxs)
             batch_idxs = []
             for idx in idxs:
