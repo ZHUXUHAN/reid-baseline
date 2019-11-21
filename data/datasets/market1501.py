@@ -29,8 +29,8 @@ class Market1501(BaseImageDataset):
         super(Market1501, self).__init__()
         self.dataset_dir = osp.join(root, self.dataset_dir)
         self.train_dir = osp.join(self.dataset_dir, 'bounding_box_train')
-        self.query_dir = osp.join(self.dataset_dir, 'cleannew_query')#cleannew_query
-        self.gallery_dir = osp.join(self.dataset_dir, 'cleannew_bounding_box_test')#cleannew_bounding_box_test
+        self.query_dir = osp.join(self.dataset_dir, 'cleannew_query')  # cleannew_query
+        self.gallery_dir = osp.join(self.dataset_dir, 'cleannew_bounding_box_test')  # cleannew_bounding_box_test
 
         self._check_before_run()
 
@@ -72,6 +72,9 @@ class Market1501(BaseImageDataset):
             pid_container.add(pid)
         pid2label = {pid: label for label, pid in enumerate(pid_container)}
 
+        pid_less4 = self.parse_data_file('./data/samplers/number_less4.txt')
+        pid_more4less10 = self.parse_data_file('./data/samplers/number_more4less10.txt')
+
         dataset = []
         for img_path in img_paths:
             pid, camid = map(int, pattern.search(img_path).groups())
@@ -82,4 +85,19 @@ class Market1501(BaseImageDataset):
             if relabel: pid = pid2label[pid]
             dataset.append((img_path, pid, camid))
 
+            # if pid in pid_less4:
+            #     dataset.append((img_path, pid, camid))
+            #     dataset.append((img_path, pid, camid))
+            #     dataset.append((img_path, pid, camid))
+            # elif pid in pid_more4less10:
+            #     dataset.append((img_path, pid, camid))
+
         return dataset
+
+    def parse_data_file(self, data_path):
+        _pids = []
+        with open(data_path, 'r') as f:
+            _pids_list = eval(f.readline().strip())
+        for i in range(len(_pids_list)):
+            _pids.append(int(_pids_list[i]))
+        return _pids
