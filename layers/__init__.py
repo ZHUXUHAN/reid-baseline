@@ -92,7 +92,7 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
         xent = CrossEntropyLabelSmooth(num_classes=num_classes, use_focal=cfg.MODEL.USE_FOCAL_LOSS)  # new add by luo
         print("label smooth on, numclasses:", num_classes)
 
-    def loss_func(score, feat, target, local_score, local_feat):  # local_feat
+    def loss_func(score, feat, target, local_score, local_feat, local_score_2, local_feat_2):  # local_feat
         if cfg.MODEL.METRIC_LOSS_TYPE == 'center':
             if cfg.MODEL.IF_LABELSMOOTH == 'on':
                 return xent(score, target) + \
@@ -112,16 +112,28 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
                            cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
                            local_loss(tripletloss_local, local_feat, pinds, ginds, target)[0]
                 elif cfg.MODEL.PCB:
+                    # tripletloss_local = TripletLoss_Local(0.3)
+                    global_loss = triplet(feat, target)[0]
+                    # pinds, ginds = triplet(feat, target)[3], triplet(feat, target)[4]
+                    return xent(score, target) + \
+                           global_loss + \
+                           cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
+                           0.5*sum(xent(s, target) for s in local_score) / len(local_score)
+                           # sum(local_loss(tripletloss_local, f.unsqueeze(-1), pinds, ginds, target)[0] for f in local_feat)/ len(local_feat)
+
+                elif cfg.MODEL.NEW_PCB:
                     global_loss = triplet(feat, target)[0]
                     return xent(score, target) + \
                            global_loss + \
                            cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
-                           sum(xent(s, target) for s in local_score) / len(local_score)
-
+                           sum(xent(s, target) for s in local_score) / len(local_score) + \
+                           sum(xent(s, target) for s in local_score_2) / len(local_score_2)
                 elif cfg.MODEL.MGN:
                     return sum(F.cross_entropy(s, target) for s in score) / len(score) + \
-                           sum(triplet(f, target)[0] for f in feat) / len(feat) + \
-                           cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(local_feat, target)
+                           sum(triplet(f, target)[0] for f in feat) / len(feat)
+                           # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(local_feat, target)
+                           # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
+
                     # sum(xent(s, target) for s in score) / len(score) + \
 
                 else:
