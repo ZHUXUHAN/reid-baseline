@@ -156,6 +156,10 @@ class MGNBaseline(nn.Module):
                            downsample=nn.Sequential(nn.Conv2d(1024, 2048, 1, bias=False), nn.BatchNorm2d(2048))),
             Bottleneck_IBN(2048, 512, ibn=False),
             Bottleneck_IBN(2048, 512, ibn=False))
+        # res_p_conv5 = nn.Sequential(
+        #     Bottleneck(1024, 512, downsample=nn.Sequential(nn.Conv2d(1024, 2048, 1, bias=False), nn.BatchNorm2d(2048))),
+        #     Bottleneck(2048, 512),
+        #     Bottleneck(2048, 512))
 
         res_p_conv5.load_state_dict(self.base.layer4.state_dict())
 
@@ -247,26 +251,24 @@ class MGNBaseline(nn.Module):
         f1_p3 = self.reduction_6(z1_p3).squeeze(dim=3).squeeze(dim=2)
         f2_p3 = self.reduction_7(z2_p3).squeeze(dim=3).squeeze(dim=2)
 
-        l_p1 = self.fc_id_2048_0(fg_p1)
-        l_p2 = self.fc_id_2048_1(fg_p2)
-        l_p3 = self.fc_id_2048_2(fg_p3)
-
-        l0_p2 = self.fc_id_256_1_0(f0_p2)
-        l1_p2 = self.fc_id_256_1_1(f1_p2)
-        l0_p3 = self.fc_id_256_2_0(f0_p3)
-        l1_p3 = self.fc_id_256_2_1(f1_p3)
-        l2_p3 = self.fc_id_256_2_2(f2_p3)
-
         if self.training:
+            l_p1 = self.fc_id_2048_0(fg_p1)
+            l_p2 = self.fc_id_2048_1(fg_p2)
+            l_p3 = self.fc_id_2048_2(fg_p3)
+
+            l0_p2 = self.fc_id_256_1_0(f0_p2)
+            l1_p2 = self.fc_id_256_1_1(f1_p2)
+            l0_p3 = self.fc_id_256_2_0(f0_p3)
+            l1_p3 = self.fc_id_256_2_1(f1_p3)
+            l2_p3 = self.fc_id_256_2_2(f2_p3)
             return (l_p1, l_p2, l_p3, l0_p2, l1_p2, l0_p3, l1_p3, l2_p3), (fg_p1, fg_p2, fg_p3), \
                    torch.cat([fg_p1, fg_p2, fg_p3, f0_p2, f1_p2, f0_p3, f1_p3, f2_p3], dim=1)
         else:
             return torch.cat([fg_p1, fg_p2, fg_p3, f0_p2, f1_p2, f0_p3, f1_p3, f2_p3], dim=1)
 
-
-def load_param(self, trained_path):
-    param_dict = torch.load(trained_path)
-    for i in param_dict:
-        if 'fc' in i:
-            continue
-        self.state_dict()[i].copy_(param_dict[i])
+    def load_param(self, trained_path):
+        param_dict = torch.load(trained_path)
+        for i in param_dict:
+            if 'fc' in i:
+                continue
+            self.state_dict()[i].copy_(param_dict[i])
