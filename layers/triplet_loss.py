@@ -136,7 +136,7 @@ class CrossEntropyLabelSmooth(nn.Module):
         self.epsilon = epsilon
         self.use_gpu = use_gpu
         self.logsoftmax = nn.LogSoftmax(dim=1)
-        self.focalloss = FocalLoss()
+        self.focalloss = FocalLoss(num_classes)
         self.use_focal = use_focal
         self.gamma = 2
         self.balance_param = 0.25
@@ -155,12 +155,6 @@ class CrossEntropyLabelSmooth(nn.Module):
             targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
             loss = (- targets * log_probs).mean(0).sum()
         else:
-            targets = torch.zeros(inputs.size()).scatter_(1, targets.unsqueeze(1).data.cpu(), 1)
             if self.use_gpu: targets = targets.cuda()
-            logpt = - F.binary_cross_entropy_with_logits(inputs, targets)
-            pt = torch.exp(logpt)
-
-            # compute the loss
-            focal_loss = -((1 - pt) ** self.gamma) * logpt
-            loss = self.balance_param * focal_loss
+            loss = self.focalloss(inputs, targets)
         return loss
