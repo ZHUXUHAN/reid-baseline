@@ -15,7 +15,6 @@ import sys
 from data.datasets.eval_reid import eval_func
 from .re_ranking import re_ranking
 from .aligned_reranking import aligned_re_ranking
-from sklearn.decomposition import PCA
 
 
 class R1_mAP(Metric):
@@ -212,57 +211,95 @@ class R1_mAP_reranking(Metric):
         for cat in range(cat_num):
             gallery += gallery
 
-        assert num_q == len(query)
-        assert num_g == len(gallery)
-
-        # dist_cp = distmat.copy()
-        # dist_cp.sort(1)
-        # dist_r1 = dist_cp[:, 0]
-        # rank1 = np.argsort(dist_r1)
-        # dist_r1.sort()
-        # flags = np.zeros(len(gallery))
-        # thr = dist_r1[int(len(rank1) * 0.85)]
-
-        indices = np.argsort(distmat, axis=1)
-        json_dict = {}
-
-        for q_idx in range(num_q):
-            qimg_path, qpid, qcamid = query[q_idx]
+        dist_cp = distmat.copy()
+        dist_cp.sort(1)
+        dist_r1 = dist_cp[:, 0]
+        rank1 = np.argsort(dist_r1)
+        dist_r1.sort()
+        flags = np.zeros(len(gallery))
+        result = {}
+        thr = dist_r1[int(len(rank1) * 0.75)]
+        for i in range(len(distmat)):
+            if i % 50 == 0:
+                print(i)
+                print(sum(flags))
+            query_index = rank1[i]
+            qimg_path, qpid, qcamid = query[query_index]
             qimg_name = self.parse_filename(osp.basename(qimg_path))
-            json_dict[qimg_name] = []
-            # dist_i = distmat[q_idx]
-
-            rank_idx = 1
-            # first = True
-
-            for g_idx in indices[q_idx, :]:
-                gimg_path, gpid, gcamid = gallery[g_idx]
-                gimg_nmae = osp.basename(gimg_path)
-
-                # if flags[g_idx] == 1:
-                #     first = False
-                #     continue
-                # if first:
-                #     flags[g_idx] = 1
-                #     first = False
-                #
-                # if dist_i[g_idx] < thr:
-                #     flags[g_idx] = 1
-
-                if self.parse_filename(gimg_nmae) in json_dict[qimg_name]:
+            gallery_list = np.argsort(distmat)[query_index]
+            dist_i = distmat[query_index]
+            result[qimg_name] = []
+            num = 0
+            first = True
+            for g in gallery_list:
+                gimg_path, gpid, gcamid = gallery[g]
+                gimg_name = osp.basename(gimg_path)
+                if flags[g] == 1:
+                    first = False
                     continue
-                else:
-                    json_dict[qimg_name].append(self.parse_filename(gimg_nmae))
-
-                rank_idx += 1
-                if rank_idx > topk:
+                if first:
+                    flags[g] = 1
+                    first = False
+                if dist_i[g] < thr:
+                    flags[g] = 1
+                result[qimg_name].append(self.parse_filename(gimg_name))
+                num += 1
+                if num == 200:
                     break
-
-            if (q_idx + 1) % 100 == 0:
-                print('- done {}/{}'.format(q_idx + 1, num_q))
-
-        with open(osp.join(save_dir, 'submission.json'), 'w', encoding='utf-8') as f:
-            json.dump(json_dict, f)
+        with open(r'submission_A.json', 'w', encoding='utf-8') as f:
+            json.dump(result, f)
+        #
+        # assert num_q == len(query)
+        # assert num_g == len(gallery)
+        #
+        # # dist_cp = distmat.copy()
+        # # dist_cp.sort(1)
+        # # dist_r1 = dist_cp[:, 0]
+        # # rank1 = np.argsort(dist_r1)
+        # # dist_r1.sort()
+        # # flags = np.zeros(len(gallery))
+        # # thr = dist_r1[int(len(rank1) * 0.85)]
+        #
+        # indices = np.argsort(distmat, axis=1)
+        # json_dict = {}
+        #
+        # for q_idx in range(num_q):
+        #     qimg_path, qpid, qcamid = query[q_idx]
+        #     qimg_name = self.parse_filename(osp.basename(qimg_path))
+        #     json_dict[qimg_name] = []
+        #     # dist_i = distmat[q_idx]
+        #
+        #     rank_idx = 1
+        #     # first = True
+        #
+        #     for g_idx in indices[q_idx, :]:
+        #         gimg_path, gpid, gcamid = gallery[g_idx]
+        #         gimg_nmae = osp.basename(gimg_path)
+        #
+        #         # if flags[g_idx] == 1:
+        #         #     first = False
+        #         #     continue
+        #         # if first:
+        #         #     flags[g_idx] = 1
+        #         #     first = False
+        #         #
+        #         # if dist_i[g_idx] < thr:
+        #         #     flags[g_idx] = 1
+        #
+        #         if self.parse_filename(gimg_nmae) in json_dict[qimg_name]:
+        #             continue
+        #         else:
+        #             json_dict[qimg_name].append(self.parse_filename(gimg_nmae))
+        #
+        #         rank_idx += 1
+        #         if rank_idx > topk:
+        #             break
+        #
+        #     if (q_idx + 1) % 100 == 0:
+        #         print('- done {}/{}'.format(q_idx + 1, num_q))
+        #
+        # with open(osp.join(save_dir, 'submission.json'), 'w', encoding='utf-8') as f:
+        #     json.dump(json_dict, f)
 
         print('Done. Json have been saved to "{}" ...'.format(save_dir))
 
@@ -529,7 +566,7 @@ class R1_mAP_reranking(Metric):
             else:
                 if self.aligned_test or self.pcb_test or self.new_pcb_test:
                     distmat = aligned_re_ranking(
-                        global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=6, k2=3, lambda_value=0.83)
+                        global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=6, k2=3, lambda_value=0.88)
 
                 else:
                     distmat = re_ranking(qf, gf, k1=7, k2=3, lambda_value=0.85)
