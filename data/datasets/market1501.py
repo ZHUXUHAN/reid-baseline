@@ -29,8 +29,8 @@ class Market1501(BaseImageDataset):
         super(Market1501, self).__init__()
         self.dataset_dir = osp.join(root, self.dataset_dir)
         self.train_dir = osp.join(self.dataset_dir, 'bounding_box_train')
-        self.query_dir = osp.join(self.dataset_dir, 'cleannew_query')  # cleannew_query
-        self.gallery_dir = osp.join(self.dataset_dir, 'cleannew_bounding_box_test')  # cleannew_bounding_box_test
+        self.query_dir = osp.join(self.dataset_dir, 'query')  # cleannew_query
+        self.gallery_dir = osp.join(self.dataset_dir, 'bounding_box_test')  # cleannew_bounding_box_test
 
         self._check_before_run()
 
@@ -72,8 +72,9 @@ class Market1501(BaseImageDataset):
             pid_container.add(pid)
         pid2label = {pid: label for label, pid in enumerate(pid_container)}
 
-        pid_less4 = self.parse_data_file('./data/samplers/number_less4.txt')
+        pid_less4 = self.parse_data_file('./data/samplers/number_newtrain_less4.txt')
         pid_more4less10 = self.parse_data_file('./data/samplers/number_more4less10.txt')
+        pid_lsee100 = self.parse_data_file('./data/samplers/number.txt')
 
         dataset = []
         for img_path in img_paths:
@@ -85,13 +86,12 @@ class Market1501(BaseImageDataset):
             if relabel: pid = pid2label[pid]
             dataset.append((img_path, pid, camid))
 
-            # if pid in pid_less4:
-            #     dataset.append((img_path, pid, camid))
-            #     dataset.append((img_path, pid, camid))
-            #     dataset.append((img_path, pid, camid))
-            # elif pid in pid_more4less10:
-            #     dataset.append((img_path, pid, camid))
-
+            if pid in pid_lsee100 and pid not in pid_less4:
+                dataset.append((img_path, pid, camid))
+            if pid in pid_less4:
+                dataset.append((img_path, pid, camid))
+                dataset.append((img_path, pid, camid))
+                dataset.append((img_path, pid, camid))
         return dataset
 
     def parse_data_file(self, data_path):
