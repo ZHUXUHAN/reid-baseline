@@ -223,95 +223,71 @@ class R1_mAP_reranking(Metric):
         result = {}
         thr = dist_r1[int(len(rank1) * 0.75)] #距离的75%为阈值 0.150
         print('thr', thr)
-        # for i in range(len(distmat)):
-        # for i, query_index in enumerate(rank1):
-        #     if i % 50 == 0:
-        #         print(i)
-        #         print(sum(flags))
-        #     # query_index = rank1[i]
-        #     qimg_path, qpid, qcamid = query[query_index]
-        #     qimg_name = self.parse_filename(osp.basename(qimg_path))
-        #     gallery_list = np.argsort(distmat)[query_index]
-        #     dist_i = distmat[query_index]
-        #     result[qimg_name] = []
-        #     num = 0
-        #     first = True
-        #     for ii, g in enumerate(gallery_list):
-        #         gimg_path, gpid, gcamid = gallery[g]
-        #         gimg_name = osp.basename(gimg_path)
-        #
-        #         if flags[g] == 1:
-        #             first = False
-        #             continue
-        #         if first: #如果每个query的第一个 就即可存下g的序号
-        #             flags[g] = 1
-        #             first = False
-        #         if dist_i[g] < thr:
-        #             flags[g] = 1
-        #
-        #         if self.parse_filename(gimg_name) in result[qimg_name]:
-        #             continue
-        #         else:
-        #             result[qimg_name].append(self.parse_filename(gimg_name))
-        #         num += 1
-        #         if num == 200:
-        #             break
-        # with open(r'submission_A.json', 'w', encoding='utf-8') as f:
-        #     json.dump(result, f)
-        #
-        # assert num_q == len(query)
-        # assert num_g == len(gallery)
-        #
-        # # dist_cp = distmat.copy()
-        # # dist_cp.sort(1)
-        # # dist_r1 = dist_cp[:, 0]
-        # # rank1 = np.argsort(dist_r1)
-        # # dist_r1.sort()
-        # # flags = np.zeros(len(gallery))
-        # # thr = dist_r1[int(len(rank1) * 0.85)]
-
-        indices = np.argsort(distmat, axis=1)
-        json_dict = {}
-
-        for q_idx in range(num_q):
-            qimg_path, qpid, qcamid = query[q_idx]
+        for i, query_index in enumerate(rank1):
+            if i % 50 == 0:
+                print(i)
+                print(sum(flags))
+            # query_index = rank1[i]
+            qimg_path, qpid, qcamid = query[query_index]
             qimg_name = self.parse_filename(osp.basename(qimg_path))
-            json_dict[qimg_name] = []
-            # dist_i = distmat[q_idx]
+            gallery_list = np.argsort(distmat)[query_index]
+            dist_i = distmat[query_index]
+            result[qimg_name] = []
+            num = 0
+            first = True
+            for ii, g in enumerate(gallery_list):
+                gimg_path, gpid, gcamid = gallery[g]
+                gimg_name = osp.basename(gimg_path)
 
-            rank_idx = 1
-            # first = True
+                if flags[g] == 1:
+                    first = False
+                    continue
+                if first: #如果每个query的第一个 就即可存下g的序号
+                    flags[g] = 1
+                    first = False
+                if dist_i[g] < thr:
+                    flags[g] = 1
 
-            for g_idx in indices[q_idx, :]:
-                gimg_path, gpid, gcamid = gallery[g_idx]
-                gimg_nmae = osp.basename(gimg_path)
-
-                # if flags[g_idx] == 1:
-                #     first = False
-                #     continue
-                # if first:
-                #     flags[g_idx] = 1
-                #     first = False
-                #
-                # if dist_i[g_idx] < thr:
-                #     flags[g_idx] = 1
-
-                if self.parse_filename(gimg_nmae) in json_dict[qimg_name]:
+                if self.parse_filename(gimg_name) in result[qimg_name]:
                     continue
                 else:
-                    json_dict[qimg_name].append(self.parse_filename(gimg_nmae))
-
-                rank_idx += 1
-                if rank_idx > topk:
+                    result[qimg_name].append(self.parse_filename(gimg_name))
+                num += 1
+                if num == 200:
                     break
-
-            if (q_idx + 1) % 100 == 0:
-                print('- done {}/{}'.format(q_idx + 1, num_q))
-
-        with open(osp.join(save_dir, 'submission.json'), 'w', encoding='utf-8') as f:
-            json.dump(json_dict, f)
-
-        print('Done. Json have been saved to "{}" ...'.format(save_dir))
+        with open(r'submission_A.json', 'w', encoding='utf-8') as f:
+            json.dump(result, f)
+        ######################
+        # indices = np.argsort(distmat, axis=1)
+        # json_dict = {}
+        #
+        # for q_idx in range(num_q):
+        #     qimg_path, qpid, qcamid = query[q_idx]
+        #     qimg_name = self.parse_filename(osp.basename(qimg_path))
+        #     json_dict[qimg_name] = []
+        #
+        #     rank_idx = 1
+        #
+        #     for g_idx in indices[q_idx, :]:
+        #         gimg_path, gpid, gcamid = gallery[g_idx]
+        #         gimg_nmae = osp.basename(gimg_path)
+        #
+        #         if self.parse_filename(gimg_nmae) in json_dict[qimg_name]:
+        #             continue
+        #         else:
+        #             json_dict[qimg_name].append(self.parse_filename(gimg_nmae))
+        #
+        #         rank_idx += 1
+        #         if rank_idx > topk:
+        #             break
+        #
+        #     if (q_idx + 1) % 100 == 0:
+        #         print('- done {}/{}'.format(q_idx + 1, num_q))
+        #
+        # with open(osp.join(save_dir, 'submission.json'), 'w', encoding='utf-8') as f:
+        #     json.dump(json_dict, f)
+        #
+        # print('Done. Json have been saved to "{}" ...'.format(save_dir))
 
     def compute_dist(self, array1, array2, type='euclidean'):
         """Compute the euclidean or cosine distance of all pairs.
@@ -396,16 +372,16 @@ class R1_mAP_reranking(Metric):
                     flip_local_qf = flip_local_feats[:self.num_query]
                     flip_local_gf = flip_local_feats[self.num_query:]
 
-                path_gloabl_dist = os.path.join('./model_feat/global', 'diedai_2')
-                path_local_dist = os.path.join('./model_feat/local', 'diedai_2')
-                if not os.path.exists(path_gloabl_dist):
-                    os.makedirs(path_gloabl_dist)
-                if not os.path.exists(path_local_dist):
-                    os.makedirs(path_local_dist)
-                print(feats.shape)
-                print(local_feats.shape)
-                np.save(os.path.join(path_gloabl_dist, 'feat.npy'), feats.cpu())
-                np.save(os.path.join(path_local_dist, 'local_feat.npy'), local_feats.cpu())
+                # path_gloabl_dist = os.path.join('./model_feat/global', 'diedai_2')
+                # path_local_dist = os.path.join('./model_feat/local', 'diedai_2')
+                # if not os.path.exists(path_gloabl_dist):
+                #     os.makedirs(path_gloabl_dist)
+                # if not os.path.exists(path_local_dist):
+                #     os.makedirs(path_local_dist)
+                # print(feats.shape)
+                # print(local_feats.shape)
+                # np.save(os.path.join(path_gloabl_dist, 'feat.npy'), feats.cpu())
+                # np.save(os.path.join(path_local_dist, 'local_feat.npy'), local_feats.cpu())
 
                 global_q_g_dist = self.compute_dist(
                     qf.cpu().detach().numpy(), gf.cpu().detach().numpy(), type='euclidean')
