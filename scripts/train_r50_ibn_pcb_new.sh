@@ -4,7 +4,7 @@
 #INPUT.PADDING 10
 nohup /root/anaconda3/bin/python -u tools/train.py --config_file='configs/softmax_triplet_with_center.yml' \
 MODEL.DEVICE_ID "('0,1')" \
-MODEL.NAME "('self')" \
+MODEL.NAME "('resnet50_ibn_a')" \
 DATASETS.NAMES "('mydata')" \
 DATASETS.ROOT_DIR "('/mnt/baseline/reid-baseline/data')" \
 MODEL.PRETRAIN_PATH "('/mnt/baseline/reid-baseline/pretrainmodel/resnet50_ibn_a_model_80.pth')" \
@@ -14,4 +14,5 @@ INPUT.SIZE_TRAIN "([384, 128])" \
 INPUT.RE_PROB 0.3 \
 MODEL.PCB_RPP False \
 MODEL.USE_FOCAL_LOSS False \
-MODEL.SUM False   > test.log 2>&1 &
+MODEL.SUM False   > test.log 2>&1 & \
+MODEL.PRETRAIN_CHOICE 'self'
