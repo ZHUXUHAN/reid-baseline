@@ -95,34 +95,7 @@ def get_data():
             query_list.append(img_file)
     gallery_list = [os.path.join(r'/mnt/baseline/reid-baseline/origindata/初赛B榜测试集/gallery_b', x) for x in
                     os.listdir(r'/mnt/baseline/reid-baseline/origindata/初赛B榜测试集/gallery_b')]
-    distmatname1 = "/mnt/baseline/reid-baseline/distmat1.npy"
-    distmatname2 = "/mnt/baseline/reid-baseline/distmat2.npy"
-    distmatname3 = "/mnt/baseline/reid-baseline/distmat3.npy"
-    distmatname4 = "/mnt/baseline/reid-baseline/distmat4.npy"
-    distmatname5 = "/mnt/baseline/reid-baseline/distmat5.npy"
-    distmatname6 = "/mnt/baseline/reid-baseline/distmat6.npy"
-    distmatname7 = "/mnt/baseline/reid-baseline/distmat7.npy"
-    distmatname8 = "/mnt/baseline/reid-baseline/distmat8.npy"
-    distmatname9 = "/mnt/baseline/reid-baseline/distmat9.npy"
-    distmatname10 = "/mnt/baseline/reid-baseline/distmat10.npy"
-    distmatname11 = "/mnt/baseline/reid-baseline/distmat11.npy"
-    distmatname12 = "/mnt/baseline/reid-baseline/distmat12.npy"
-    
-
-    distmat_1 = np.load(distmatname1)
-    distmat_2 = np.load(distmatname2)
-    distmat_3 = np.load(distmatname3)
-    distmat_4 = np.load(distmatname4)
-    distmat_5 = np.load(distmatname5)
-    distmat_6 = np.load(distmatname6)
-    distmat_7 = np.load(distmatname7)
-    distmat_8 = np.load(distmatname8)
-    distmat_9 = np.load(distmatname9)
-    distmat_10 = np.load(distmatname10)
-    distmat_11 = np.load(distmatname11)
-    distmat_12 = np.load(distmatname12)
-    #distmat = 0.1 * distmat_1 + 0.05 * distmat_2 + 0.2 * distmat_3 + 0.01 * distmat_4 + 0.01 * distmat_5 + 0.21 * distmat_6 + 0.21 * distmat_7 + 0.21 * distmat_8
-    distmat = 0.05 * distmat_1 + 0.01 * distmat_2 + 0.07 * distmat_3 + 0.008 * distmat_4 + 0.008 * distmat_5 + 0.08 * distmat_6 + 0.08 * distmat_7 + 0.08 * distmat_8 + 0.1 * distmat_9 + 0.09 * distmat_10 + 0.08 * distmat_11 + 0.1 * distmat_12
+   
     #write_json(dist=distmat, query_name=query_list, gallery_name=gallery_list)
     write_json2(dist=distmat, query_name=query_list, gallery_name=gallery_list)
 
