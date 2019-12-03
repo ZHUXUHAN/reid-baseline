@@ -160,43 +160,17 @@ class NEW_PCBBaseline(nn.Module):
             self.base.load_param(model_path)
             print('Loading pretrained ImageNet model......')
 
-        self.gap = nn.AdaptiveAvgPool2d(1)
-        # self.gap = nn.AdaptiveMaxPool2d(1)
+        self.gap_avg = nn.AdaptiveAvgPool2d(1)
+        self.gap_max = nn.AdaptiveMaxPool2d(1)
         self.num_classes = num_classes
         self.neck = neck
         self.neck_feat = neck_feat
 
         self.base.layer4[0].conv2 = nn.Conv2d(
             512, 512, kernel_size=3, bias=False, stride=1, padding=1)
-        # self.base.layer4[0].downsample = nn.Sequential(
-        #     nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
-        #     nn.BatchNorm2d(2048))
         self.base.layer4[0].downsample = nn.Sequential(
             nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(2048))
-
-        # self.backbone = nn.Sequential(
-        #     self.base.conv1,
-        #     self.base.bn1,
-        #     self.base.relu,
-        #     self.base.maxpool,
-        #     self.base.layer1,
-        #     self.base.layer2,
-        #     self.base.layer3,
-        # )
-        # self.res_g_conv5 = self.base.layer4  # global 2倍下采样
-        #
-        # base_copy = copy.deepcopy(self.base)
-        #
-        # base_copy.layer4[0].conv2 = nn.Conv2d(
-        #     512, 512, kernel_size=3, bias=False, stride=1, padding=1)
-        # base_copy.layer4[0].conv2.apply(weights_init_kaiming)
-        # base_copy.layer4[0].downsample = nn.Sequential(
-        #     nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
-        #     nn.BatchNorm2d(2048))
-        # base_copy.layer4[0].downsample.apply(weights_init_kaiming)
-        #
-        # self.res_local_conv5 = copy.deepcopy(base_copy.layer4)
 
         if self.sum:
             print("Building Attention Branch")
@@ -213,10 +187,7 @@ class NEW_PCBBaseline(nn.Module):
         if self.rpp:
             self.avgpool = RPP()
         else:
-            self.avgpool_1 = nn.AdaptiveAvgPool2d((6, 1))
-            # self.avgpool_3 = nn.AdaptiveAvgPool2d((4, 1))
-            # self.avgpool_4 = nn.AdaptiveAvgPool2d((4, 1))
-
+            self.avgpool = nn.AdaptiveAvgPool2d((6, 1))
         if self.dropout:
             self.dropout_layer = nn.Dropout(p=0.5)
 
@@ -353,8 +324,7 @@ class NEW_PCBBaseline(nn.Module):
                 self.bottleneck_5_list.append(bottleneck_5)
 
     def forward(self, x, label):
-        # global_feat = self.gap(self.res_g_conv5(self.backbone(x)))  # (b, 2048, 1, 1)
-        global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
+        global_feat = self.gap_avg(self.base(x)) + self.gap_max(self.base(x)) # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
         if self.neck == 'no':
@@ -363,14 +333,11 @@ class NEW_PCBBaseline(nn.Module):
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
         # [N, C, H, W]
-        features_G_1 = self.avgpool_1(self.base(x))
-        features_G_2 = self.avgpool_1(self.base(x))
-        features_G_3 = self.avgpool_1(self.base(x))
-        features_G_4 = self.avgpool_1(self.base(x))
-        features_G_5 = self.avgpool_1(self.base(x))
-
-        # features_G_1 = self.avgpool_1(self.res_local_conv5(self.backbone(x)))  # (b, 2048, 1, 1)
-        # features_G_2 = self.avgpool_1(self.res_local_conv5(self.backbone(x)))  # (b, 2048, 1, 1)
+        features_G_1 = self.avgpool(self.base(x))
+        features_G_2 = self.avgpool(self.base(x))
+        features_G_3 = self.avgpool(self.base(x))
+        features_G_4 = self.avgpool(self.base(x))
+        features_G_5 = self.avgpool(self.base(x))
 
         assert features_G_1.size(
             2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides'
