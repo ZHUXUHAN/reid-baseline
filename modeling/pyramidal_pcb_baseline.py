@@ -156,7 +156,7 @@ class NEW_PCBBaseline(nn.Module):
 
         if pretrain_choice == 'imagenet':
             if not os.path.exists(model_path):
-               assert "No The Pretrained Model"
+                assert "No The Pretrained Model"
             self.base.load_param(model_path)
             print('Loading pretrained ImageNet model......')
 
@@ -166,32 +166,37 @@ class NEW_PCBBaseline(nn.Module):
         self.neck = neck
         self.neck_feat = neck_feat
 
-        self.backbone = nn.Sequential(
-            self.base.conv1,
-            self.base.bn1,
-            self.base.relu,
-            self.base.maxpool,
-            self.base.layer1,
-            self.base.layer2,
-            self.base.layer3,
-        )
-        self.res_g_conv5 = self.base.layer4  # global 2倍下采样
-
-        base_copy = copy.deepcopy(self.base)
-
-        base_copy.layer4[0].conv2 = nn.Conv2d(
+        self.base.layer4[0].conv2 = nn.Conv2d(
             512, 512, kernel_size=3, bias=False, stride=1, padding=1)
-        base_copy.layer4[0].conv2.apply(weights_init_kaiming)
-        base_copy.layer4[0].downsample = nn.Sequential(
+        # self.base.layer4[0].downsample = nn.Sequential(
+        #     nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
+        #     nn.BatchNorm2d(2048))
+        self.base.layer4[0].downsample = nn.Sequential(
             nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(2048))
-        base_copy.layer4[0].downsample.apply(weights_init_kaiming)
 
-        self.res_l1_conv5 = copy.deepcopy(base_copy.layer4)
-        self.res_l2_conv5 = copy.deepcopy(base_copy.layer4)
-        # self.res_l3_conv5 = copy.deepcopy(base_copy.layer4)
-        # self.res_l4_conv5 = copy.deepcopy(base_copy.layer4)
-        # self.res_l4_conv5 = copy.deepcopy(base_copy.layer4)
+        # self.backbone = nn.Sequential(
+        #     self.base.conv1,
+        #     self.base.bn1,
+        #     self.base.relu,
+        #     self.base.maxpool,
+        #     self.base.layer1,
+        #     self.base.layer2,
+        #     self.base.layer3,
+        # )
+        # self.res_g_conv5 = self.base.layer4  # global 2倍下采样
+        #
+        # base_copy = copy.deepcopy(self.base)
+        #
+        # base_copy.layer4[0].conv2 = nn.Conv2d(
+        #     512, 512, kernel_size=3, bias=False, stride=1, padding=1)
+        # base_copy.layer4[0].conv2.apply(weights_init_kaiming)
+        # base_copy.layer4[0].downsample = nn.Sequential(
+        #     nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
+        #     nn.BatchNorm2d(2048))
+        # base_copy.layer4[0].downsample.apply(weights_init_kaiming)
+        #
+        # self.res_local_conv5 = copy.deepcopy(base_copy.layer4)
 
         if self.sum:
             print("Building Attention Branch")
@@ -209,7 +214,6 @@ class NEW_PCBBaseline(nn.Module):
             self.avgpool = RPP()
         else:
             self.avgpool_1 = nn.AdaptiveAvgPool2d((6, 1))
-            self.avgpool_2 = nn.AdaptiveAvgPool2d((5, 1))
             # self.avgpool_3 = nn.AdaptiveAvgPool2d((4, 1))
             # self.avgpool_4 = nn.AdaptiveAvgPool2d((4, 1))
 
@@ -221,6 +225,9 @@ class NEW_PCBBaseline(nn.Module):
 
         self.l1_conv_list = nn.ModuleList()
         self.l2_conv_list = nn.ModuleList()
+        self.l3_conv_list = nn.ModuleList()
+        self.l4_conv_list = nn.ModuleList()
+        self.l5_conv_list = nn.ModuleList()
 
         for _ in range(6):
             local_conv = nn.Sequential(
@@ -232,15 +239,42 @@ class NEW_PCBBaseline(nn.Module):
 
         for _ in range(2):
             local_2_conv = nn.Sequential(
-                nn.Conv1d(2048, 256, kernel_size=1),
+                nn.Conv1d(2048 * 5, 256, kernel_size=1),
                 nn.BatchNorm2d(256),
                 nn.ReLU(inplace=True))
             local_2_conv.apply(weights_init_kaiming)
             self.l2_conv_list.append(local_2_conv)
 
+        for _ in range(3):
+            local_3_conv = nn.Sequential(
+                nn.Conv1d(2048 * 4, 256, kernel_size=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(inplace=True))
+            local_3_conv.apply(weights_init_kaiming)
+            self.l3_conv_list.append(local_3_conv)
+
+        for _ in range(4):
+            local_4_conv = nn.Sequential(
+                nn.Conv1d(2048 * 3, 256, kernel_size=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(inplace=True))
+            local_4_conv.apply(weights_init_kaiming)
+            self.l4_conv_list.append(local_4_conv)
+
+        for _ in range(5):
+            local_5_conv = nn.Sequential(
+                nn.Conv1d(2048 * 2, 256, kernel_size=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(inplace=True))
+            local_5_conv.apply(weights_init_kaiming)
+            self.l5_conv_list.append(local_5_conv)
+
         # Classifier for each stripe
         self.fc_1_list = nn.ModuleList()
         self.fc_2_list = nn.ModuleList()
+        self.fc_3_list = nn.ModuleList()
+        self.fc_4_list = nn.ModuleList()
+        self.fc_5_list = nn.ModuleList()
 
         if self.neck == 'no':
             # For Global
@@ -251,13 +285,13 @@ class NEW_PCBBaseline(nn.Module):
                 fc = nn.Linear(self.hidden_dim_1, self.num_classes)
                 fc.apply(weights_init_classifier)
                 self.fc_1_list.append(fc)
-            for _ in range(2):
-                fc_2 = nn.Linear(self.hidden_dim_2, self.num_classes)
-                fc_2.apply(weights_init_classifier)
-                self.fc_2_list.append(fc_2)
+
         elif self.neck == 'bnneck':
             self.bottleneck_1_list = nn.ModuleList()
             self.bottleneck_2_list = nn.ModuleList()
+            self.bottleneck_3_list = nn.ModuleList()
+            self.bottleneck_4_list = nn.ModuleList()
+            self.bottleneck_5_list = nn.ModuleList()
             # For Global
             self.bottleneck = nn.BatchNorm1d(self.in_planes)
             self.bottleneck.bias.requires_grad_(False)  # no shift
@@ -275,7 +309,7 @@ class NEW_PCBBaseline(nn.Module):
 
                 self.bottleneck_1_list.append(bottleneck)
             for _ in range(2):
-                fc_2 = nn.Linear(1280, self.num_classes, bias=False)
+                fc_2 = nn.Linear(256, self.num_classes, bias=False)
                 fc_2.apply(weights_init_classifier)
                 self.fc_2_list.append(fc_2)
 
@@ -285,8 +319,42 @@ class NEW_PCBBaseline(nn.Module):
 
                 self.bottleneck_2_list.append(bottleneck_2)
 
+            for _ in range(3):
+                fc_3 = nn.Linear(256, self.num_classes, bias=False)
+                fc_3.apply(weights_init_classifier)
+                self.fc_3_list.append(fc_3)
+
+                bottleneck_3 = nn.BatchNorm1d(256)
+                bottleneck_3.bias.requires_grad_(False)  # no shift
+                bottleneck_3.apply(weights_init_kaiming)
+
+                self.bottleneck_3_list.append(bottleneck_3)
+
+            for _ in range(4):
+                fc_4 = nn.Linear(256, self.num_classes, bias=False)
+                fc_4.apply(weights_init_classifier)
+                self.fc_4_list.append(fc_4)
+
+                bottleneck_4 = nn.BatchNorm1d(256)
+                bottleneck_4.bias.requires_grad_(False)  # no shift
+                bottleneck_4.apply(weights_init_kaiming)
+
+                self.bottleneck_4_list.append(bottleneck_4)
+
+            for _ in range(5):
+                fc_5 = nn.Linear(256, self.num_classes, bias=False)
+                fc_5.apply(weights_init_classifier)
+                self.fc_5_list.append(fc_5)
+
+                bottleneck_5 = nn.BatchNorm1d(256)
+                bottleneck_5.bias.requires_grad_(False)  # no shift
+                bottleneck_5.apply(weights_init_kaiming)
+
+                self.bottleneck_5_list.append(bottleneck_5)
+
     def forward(self, x, label):
-        global_feat = self.gap(self.res_g_conv5(self.backbone(x)))  # (b, 2048, 1, 1)
+        # global_feat = self.gap(self.res_g_conv5(self.backbone(x)))  # (b, 2048, 1, 1)
+        global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
         if self.neck == 'no':
@@ -295,10 +363,14 @@ class NEW_PCBBaseline(nn.Module):
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
         # [N, C, H, W]
-        print('0', self.res_l1_conv5(self.backbone(x)).shape)
-        features_G_1 = self.avgpool_1(self.res_l1_conv5(self.backbone(x)))  # (b, 2048, 1, 1)
-        features_G_2 = self.avgpool_1(self.res_l2_conv5(self.backbone(x)))  # (b, 2048, 1, 1)
-        print('1', features_G_2.shape)
+        features_G_1 = self.avgpool_1(self.base(x))
+        features_G_2 = self.avgpool_1(self.base(x))
+        features_G_3 = self.avgpool_1(self.base(x))
+        features_G_4 = self.avgpool_1(self.base(x))
+        features_G_5 = self.avgpool_1(self.base(x))
+
+        # features_G_1 = self.avgpool_1(self.res_local_conv5(self.backbone(x)))  # (b, 2048, 1, 1)
+        # features_G_2 = self.avgpool_1(self.res_local_conv5(self.backbone(x)))  # (b, 2048, 1, 1)
 
         assert features_G_1.size(
             2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides'
@@ -306,11 +378,14 @@ class NEW_PCBBaseline(nn.Module):
         if self.dropout and self.training:
             features_G_1 = self.dropout_layer(features_G_1)  # dropout only used in training
             features_G_2 = self.dropout_layer(features_G_2)  # dropout only used in training
+            features_G_3 = self.dropout_layer(features_G_3)  # dropout only used in training
         # [N, C=256, H=S, W=1]
         features_H_1 = []
         features_H_2 = []
+        features_H_3 = []
+        features_H_4 = []
+        features_H_5 = []
         # Local_1: 1、2、3、4、5、6
-
         for i in range(6):
             stripe_features_H_conv = self.l1_conv_list[i][0](
                 features_G_1[:, :, i, :])
@@ -334,12 +409,8 @@ class NEW_PCBBaseline(nn.Module):
         batch_size = features_G_2.size(0)
         _dim = features_G_2.size(1)
 
-        # features_G_2_1 = features_G_2[:, :, 0:5, :].contiguous().view(batch_size, _dim*5, -1).squeeze()
-        # features_G_2_2 = features_G_2[:, :, 1:6, :].contiguous().view(batch_size, _dim*5, -1).squeeze()
-        features_G_2_1 = features_G_2[:, :, 0:5, :].squeeze()
-        features_G_2_2 = features_G_2[:, :, 0:5, :].squeeze()
-        print(features_G_2[:, :, 0:5, :].shape)
-        print('-----',self.avgpool_2(features_G_2[:, :, 0:5, :]).shape)
+        features_G_2_1 = features_G_2[:, :, 0:5, :].contiguous().view(batch_size, _dim * 5, -1)
+        features_G_2_2 = features_G_2[:, :, 1:6, :].contiguous().view(batch_size, _dim * 5, -1)
 
         for i in range(2):
             if i == 0:
@@ -347,53 +418,167 @@ class NEW_PCBBaseline(nn.Module):
                     features_G_2_1)
                 stripe_features_H_2 = self.l2_conv_list[i][1:](
                     stripe_features_H_2_conv.unsqueeze(-1))
-                if self.sum:
-                    stripe_features_H_pam = self.atten_pam(stripe_features_H_2)
-                    stripe_features_H_cam = self.atten_cam(stripe_features_H_2)
-                    stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
-                if self.neck == 'no':
-                    stripe_features_H_2 = stripe_features_H_2
-                elif self.neck == 'bnneck':
-                    if self.sum:
-                        stripe_features_H_2 = self.bottleneck_2_list[i](
-                            stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
-                    else:
-                        stripe_features_H_2 = self.bottleneck_2_list[i](
-                            stripe_features_H_2.squeeze(-1))  # normalize for angular softmax
-                features_H_2.append(stripe_features_H_2.squeeze())
             if i == 1:
                 stripe_features_H_2_conv = self.l2_conv_list[i][0](
                     features_G_2_2)
                 stripe_features_H_2 = self.l2_conv_list[i][1:](
                     stripe_features_H_2_conv.unsqueeze(-1))
+            if self.sum:
+                stripe_features_H_pam = self.atten_pam(stripe_features_H_2)
+                stripe_features_H_cam = self.atten_cam(stripe_features_H_2)
+                stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
+            if self.neck == 'no':
+                stripe_features_H_2 = stripe_features_H_2
+            elif self.neck == 'bnneck':
                 if self.sum:
-                    stripe_features_H_pam = self.atten_pam(stripe_features_H_2)
-                    stripe_features_H_cam = self.atten_cam(stripe_features_H_2)
+                    stripe_features_H_2 = self.bottleneck_2_list[i](
+                        stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
+                else:
+                    stripe_features_H_2 = self.bottleneck_2_list[i](
+                        stripe_features_H_2.squeeze(-1))  # normalize for angular softmax
+            features_H_2.append(stripe_features_H_2.squeeze())
+
+            features_G_3_1 = features_G_3[:, :, 0:4, :].contiguous().view(batch_size, _dim * 4, -1)
+            features_G_3_2 = features_G_3[:, :, 1:5, :].contiguous().view(batch_size, _dim * 4, -1)
+            features_G_3_3 = features_G_3[:, :, 2:6, :].contiguous().view(batch_size, _dim * 4, -1)
+
+            for i in range(3):
+                if i == 0:
+                    stripe_features_H_3_conv = self.l3_conv_list[i][0](
+                        features_G_3_1)
+                    stripe_features_H_3 = self.l3_conv_list[i][1:](
+                        stripe_features_H_3_conv.unsqueeze(-1))
+                if i == 1:
+                    stripe_features_H_3_conv = self.l3_conv_list[i][0](
+                        features_G_3_2)
+                    stripe_features_H_3 = self.l3_conv_list[i][1:](
+                        stripe_features_H_3_conv.unsqueeze(-1))
+                if i == 2:
+                    stripe_features_H_3_conv = self.l3_conv_list[i][0](
+                        features_G_3_3)
+                    stripe_features_H_3 = self.l3_conv_list[i][1:](
+                        stripe_features_H_3_conv.unsqueeze(-1))
+                if self.sum:
+                    stripe_features_H_pam = self.atten_pam(stripe_features_H_3)
+                    stripe_features_H_cam = self.atten_cam(stripe_features_H_3)
                     stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
                 if self.neck == 'no':
-                    stripe_features_H_2 = stripe_features_H_2
+                    stripe_features_H_3 = stripe_features_H_3
                 elif self.neck == 'bnneck':
                     if self.sum:
-                        stripe_features_H_2 = self.bottleneck_2_list[i](
+                        stripe_features_H_3 = self.bottleneck_3_list[i](
                             stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
                     else:
-                        stripe_features_H_2 = self.bottleneck_2_list[i](
-                            stripe_features_H_2.squeeze(-1))  # normalize for angular softmax
-                features_H_2.append(stripe_features_H_2.squeeze())
+                        stripe_features_H_3 = self.bottleneck_3_list[i](
+                            stripe_features_H_3.squeeze(-1))  # normalize for angular softmax
+                features_H_3.append(stripe_features_H_3.squeeze())
+
+            features_G_4_1 = features_G_4[:, :, 0:3, :].contiguous().view(batch_size, _dim * 3, -1)
+            features_G_4_2 = features_G_4[:, :, 1:4, :].contiguous().view(batch_size, _dim * 3, -1)
+            features_G_4_3 = features_G_4[:, :, 2:5, :].contiguous().view(batch_size, _dim * 3, -1)
+            features_G_4_4 = features_G_4[:, :, 3:6, :].contiguous().view(batch_size, _dim * 3, -1)
+            for i in range(4):
+                if i == 0:
+                    stripe_features_H_4_conv = self.l4_conv_list[i][0](
+                        features_G_4_1)
+                    stripe_features_H_4 = self.l4_conv_list[i][1:](
+                        stripe_features_H_4_conv.unsqueeze(-1))
+                if i == 1:
+                    stripe_features_H_4_conv = self.l4_conv_list[i][0](
+                        features_G_4_2)
+                    stripe_features_H_4 = self.l4_conv_list[i][1:](
+                        stripe_features_H_4_conv.unsqueeze(-1))
+                if i == 2:
+                    stripe_features_H_4_conv = self.l4_conv_list[i][0](
+                        features_G_4_3)
+                    stripe_features_H_4 = self.l4_conv_list[i][1:](
+                        stripe_features_H_4_conv.unsqueeze(-1))
+                if i == 3:
+                    stripe_features_H_4_conv = self.l4_conv_list[i][0](
+                        features_G_4_4)
+                    stripe_features_H_4 = self.l4_conv_list[i][1:](
+                        stripe_features_H_4_conv.unsqueeze(-1))
+                if self.sum:
+                    stripe_features_H_pam = self.atten_pam(stripe_features_H_4)
+                    stripe_features_H_cam = self.atten_cam(stripe_features_H_4)
+                    stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
+                if self.neck == 'no':
+                    stripe_features_H_4 = stripe_features_H_4
+                elif self.neck == 'bnneck':
+                    if self.sum:
+                        stripe_features_H_4 = self.bottleneck_4_list[i](
+                            stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
+                    else:
+                        stripe_features_H_4 = self.bottleneck_4_list[i](
+                            stripe_features_H_4.squeeze(-1))  # normalize for angular softmax
+                features_H_4.append(stripe_features_H_4.squeeze())
+
+            features_G_5_1 = features_G_5[:, :, 0:2, :].contiguous().view(batch_size, _dim * 2, -1)
+            features_G_5_2 = features_G_5[:, :, 1:3, :].contiguous().view(batch_size, _dim * 2, -1)
+            features_G_5_3 = features_G_5[:, :, 2:4, :].contiguous().view(batch_size, _dim * 2, -1)
+            features_G_5_4 = features_G_5[:, :, 3:5, :].contiguous().view(batch_size, _dim * 2, -1)
+            features_G_5_5 = features_G_5[:, :, 4:6, :].contiguous().view(batch_size, _dim * 2, -1)
+            for i in range(4):
+                if i == 0:
+                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                        features_G_5_1)
+                    stripe_features_H_5 = self.l5_conv_list[i][1:](
+                        stripe_features_H_5_conv.unsqueeze(-1))
+                if i == 1:
+                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                        features_G_5_2)
+                    stripe_features_H_5 = self.l5_conv_list[i][1:](
+                        stripe_features_H_5_conv.unsqueeze(-1))
+                if i == 2:
+                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                        features_G_5_3)
+                    stripe_features_H_5 = self.l5_conv_list[i][1:](
+                        stripe_features_H_5_conv.unsqueeze(-1))
+                if i == 3:
+                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                        features_G_5_4)
+                    stripe_features_H_5 = self.l5_conv_list[i][1:](
+                        stripe_features_H_5_conv.unsqueeze(-1))
+                if i == 4:
+                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                        features_G_5_5)
+                    stripe_features_H_5 = self.l5_conv_list[i][1:](
+                        stripe_features_H_5_conv.unsqueeze(-1))
+                if self.sum:
+                    stripe_features_H_pam = self.atten_pam(stripe_features_H_5)
+                    stripe_features_H_cam = self.atten_cam(stripe_features_H_5)
+                    stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
+                if self.neck == 'no':
+                    stripe_features_H_5 = stripe_features_H_5
+                elif self.neck == 'bnneck':
+                    if self.sum:
+                        stripe_features_H_5 = self.bottleneck_5_list[i](
+                            stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
+                    else:
+                        stripe_features_H_5 = self.bottleneck_5_list[i](
+                            stripe_features_H_5.squeeze(-1))  # normalize for angular softmax
+                features_H_5.append(stripe_features_H_4.squeeze())
 
         if self.training:
             # [N, C=num_classes]
             batch_size = x.size(0)
-            logits_list = [self.fc_1_list[i](features_H_1[i].view(batch_size, -1))
-                           for i in range(6)]
+            logits_list_1 = [self.fc_1_list[i](features_H_1[i].view(batch_size, -1))
+                             for i in range(6)]
             logits_list_2 = [self.fc_2_list[i](features_H_2[i].view(batch_size, -1))
-                           for i in range(2)]
+                             for i in range(2)]
+            logits_list_3 = [self.fc_3_list[i](features_H_3[i].view(batch_size, -1))
+                             for i in range(3)]
+            logits_list_4 = [self.fc_4_list[i](features_H_4[i].view(batch_size, -1))
+                             for i in range(4)]
+            logits_list_5 = [self.fc_5_list[i](features_H_5[i].view(batch_size, -1))
+                             for i in range(5)]
+            logits_list = logits_list_1 + logits_list_2 + logits_list_3 + logits_list_4 + logits_list_5
+            features_H_1 = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
             if self.arc:
                 cls_score = self.arcface(feat, label)
             else:
                 cls_score = self.classifier(feat)
             # global_score global_ft part_score part_ft
-            print('3', features_H_2[0].shape, features_H_1[0].shape)
             return cls_score, global_feat, logits_list, features_H_1, logits_list_2, features_H_2
         else:
             if self.neck_feat == 'after':
