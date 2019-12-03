@@ -74,6 +74,8 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
         feat_dim = 512
     elif cfg.MODEL.NAME == 'densenet161':
         feat_dim = 2208
+    # elif cfg.MODEL.PCB and cfg.MODEL.NAME=='resnet50_ibn_a':
+    #     feat_dim = 256*6
     else:
         feat_dim = 2048
 
@@ -118,8 +120,10 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
                     return xent(score, target) + \
                            global_loss + \
                            cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
-                           0.5*sum(xent(s, target) for s in local_score) / len(local_score)
-                           # sum(local_loss(tripletloss_local, f.unsqueeze(-1), pinds, ginds, target)[0] for f in local_feat)/ len(local_feat)
+                           sum(xent(s, target) for s in local_score) / len(local_score)
+                           # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(torch.stack(local_feat, dim=2), target)
+                        # sum(local_loss(tripletloss_local, f.unsqueeze(-1), pinds, ginds, target)[0] for f in local_feat)/ len(local_feat)
+                        # sum(triplet(f, target) for f in local_feat) / len(local_feat) + \
 
                 elif cfg.MODEL.NEW_PCB:
                     global_loss = triplet(feat, target)[0]
@@ -130,10 +134,9 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
                            sum(xent(s, target) for s in local_score_2) / len(local_score_2)
                 elif cfg.MODEL.MGN:
                     return sum(F.cross_entropy(s, target) for s in score) / len(score) + \
-                           sum(triplet(f, target)[0] for f in feat) / len(feat)
-                           # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(local_feat, target)
+                           sum(triplet(f, target)[0] for f in feat) / len(feat) + \
+                           cfg.SOLVER.CENTER_LOSS_WEIGHT * sum(center_criterion(f, target) for f in local_feat) / len(local_feat)
                            # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
-
                     # sum(xent(s, target) for s in score) / len(score) + \
 
                 else:
@@ -143,9 +146,12 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
                            cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
 
             else:
-                return F.cross_entropy(score, target) + \
-                       triplet(feat, target)[0] + \
-                       cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
+                return 2*sum(F.cross_entropy(s, target) for s in score) / len(score) + \
+                       sum(triplet(f, target)[0] for f in feat) / len(feat) + \
+                       cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(local_feat, target)
+                # return F.cross_entropy(score, target) + \
+                #        triplet(feat, target)[0] + \
+                #        cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
 
         else:
             print('expected METRIC_LOSS_TYPE with center should be center, triplet_center'
