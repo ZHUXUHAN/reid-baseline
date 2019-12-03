@@ -168,9 +168,6 @@ class NEW_PCBBaseline(nn.Module):
 
         self.base.layer4[0].conv2 = nn.Conv2d(
             512, 512, kernel_size=3, bias=False, stride=1, padding=1)
-        # self.base.layer4[0].downsample = nn.Sequential(
-        #     nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
-        #     nn.BatchNorm2d(2048))
         self.base.layer4[0].downsample = nn.Sequential(
             nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(2048))
