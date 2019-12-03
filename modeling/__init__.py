@@ -8,7 +8,8 @@ from .baseline import Baseline
 from .aligned_baseline import AlignedBaseline
 from .pcb_baseline import PCBBaseline
 from .mgn_baseline import MGNBaseline
-from .new_pcb_baseline import NEW_PCBBaseline
+# from .new_pcb_baseline import NEW_PCBBaseline
+from .pyramidal_pcb_baseline import NEW_PCBBaseline
 
 
 def build_model(cfg, num_classes):
@@ -29,7 +30,7 @@ def build_model(cfg, num_classes):
                                 cfg.TEST.NECK_FEAT, cfg.MODEL.NAME, cfg.MODEL.PRETRAIN_CHOICE, cfg.MODEL.PCB_NUM_STRIPES,
                             cfg.MODEL.WITH_GCB, cfg.MODEL.PCB_RPP, cfg.MODEL.DROPOUT, cfg.MODEL.CAM, cfg.MODEL.SUM, cfg.MODEL.ARC)
 
-    else:
+    else:   
         model = Baseline(num_classes, cfg.MODEL.LAST_STRIDE, cfg.MODEL.PRETRAIN_PATH, cfg.MODEL.NECK,
                          cfg.TEST.NECK_FEAT,
                          cfg.MODEL.NAME, cfg.MODEL.PRETRAIN_CHOICE, cfg.MODEL.WITH_GCB)
