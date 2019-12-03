@@ -185,9 +185,10 @@ class NEW_PCBBaseline(nn.Module):
 
         # Add new layers
         if self.rpp:
-            self.avgpool = RPP()
+            self.local_avgpool = RPP()
         else:
-            self.avgpool = nn.AdaptiveAvgPool2d((6, 1))
+            self.local_avgpool_avg = nn.AdaptiveAvgPool2d((6, 1))
+            self.local_avgpool_max = nn.AdaptiveMaxPool2d((6, 1))
         if self.dropout:
             self.dropout_layer = nn.Dropout(p=0.5)
 
@@ -324,7 +325,8 @@ class NEW_PCBBaseline(nn.Module):
                 self.bottleneck_5_list.append(bottleneck_5)
 
     def forward(self, x, label):
-        global_feat = self.gap_avg(self.base(x)) + self.gap_max(self.base(x)) # (b, 2048, 1, 1)
+        features_G = self.base(x)
+        global_feat = self.gap_avg(features_G) + self.gap_max(features_G) # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
         if self.neck == 'no':
@@ -333,11 +335,12 @@ class NEW_PCBBaseline(nn.Module):
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
         # [N, C, H, W]
-        features_G_1 = self.avgpool(self.base(x))
-        features_G_2 = self.avgpool(self.base(x))
-        features_G_3 = self.avgpool(self.base(x))
-        features_G_4 = self.avgpool(self.base(x))
-        features_G_5 = self.avgpool(self.base(x))
+
+        features_G_1 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
+        features_G_2 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
+        features_G_3 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
+        features_G_4 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
+        features_G_5 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
 
         assert features_G_1.size(
             2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides'
@@ -405,126 +408,126 @@ class NEW_PCBBaseline(nn.Module):
                         stripe_features_H_2.squeeze(-1))  # normalize for angular softmax
             features_H_2.append(stripe_features_H_2.squeeze())
 
-            features_G_3_1 = features_G_3[:, :, 0:4, :].contiguous().view(batch_size, _dim * 4, -1)
-            features_G_3_2 = features_G_3[:, :, 1:5, :].contiguous().view(batch_size, _dim * 4, -1)
-            features_G_3_3 = features_G_3[:, :, 2:6, :].contiguous().view(batch_size, _dim * 4, -1)
+        features_G_3_1 = features_G_3[:, :, 0:4, :].contiguous().view(batch_size, _dim * 4, -1)
+        features_G_3_2 = features_G_3[:, :, 1:5, :].contiguous().view(batch_size, _dim * 4, -1)
+        features_G_3_3 = features_G_3[:, :, 2:6, :].contiguous().view(batch_size, _dim * 4, -1)
 
-            for i in range(3):
-                if i == 0:
-                    stripe_features_H_3_conv = self.l3_conv_list[i][0](
-                        features_G_3_1)
-                    stripe_features_H_3 = self.l3_conv_list[i][1:](
-                        stripe_features_H_3_conv.unsqueeze(-1))
-                if i == 1:
-                    stripe_features_H_3_conv = self.l3_conv_list[i][0](
-                        features_G_3_2)
-                    stripe_features_H_3 = self.l3_conv_list[i][1:](
-                        stripe_features_H_3_conv.unsqueeze(-1))
-                if i == 2:
-                    stripe_features_H_3_conv = self.l3_conv_list[i][0](
-                        features_G_3_3)
-                    stripe_features_H_3 = self.l3_conv_list[i][1:](
-                        stripe_features_H_3_conv.unsqueeze(-1))
+        for i in range(3):
+            if i == 0:
+                stripe_features_H_3_conv = self.l3_conv_list[i][0](
+                    features_G_3_1)
+                stripe_features_H_3 = self.l3_conv_list[i][1:](
+                    stripe_features_H_3_conv.unsqueeze(-1))
+            if i == 1:
+                stripe_features_H_3_conv = self.l3_conv_list[i][0](
+                    features_G_3_2)
+                stripe_features_H_3 = self.l3_conv_list[i][1:](
+                    stripe_features_H_3_conv.unsqueeze(-1))
+            if i == 2:
+                stripe_features_H_3_conv = self.l3_conv_list[i][0](
+                    features_G_3_3)
+                stripe_features_H_3 = self.l3_conv_list[i][1:](
+                    stripe_features_H_3_conv.unsqueeze(-1))
+            if self.sum:
+                stripe_features_H_pam = self.atten_pam(stripe_features_H_3)
+                stripe_features_H_cam = self.atten_cam(stripe_features_H_3)
+                stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
+            if self.neck == 'no':
+                stripe_features_H_3 = stripe_features_H_3
+            elif self.neck == 'bnneck':
                 if self.sum:
-                    stripe_features_H_pam = self.atten_pam(stripe_features_H_3)
-                    stripe_features_H_cam = self.atten_cam(stripe_features_H_3)
-                    stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
-                if self.neck == 'no':
-                    stripe_features_H_3 = stripe_features_H_3
-                elif self.neck == 'bnneck':
-                    if self.sum:
-                        stripe_features_H_3 = self.bottleneck_3_list[i](
-                            stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
-                    else:
-                        stripe_features_H_3 = self.bottleneck_3_list[i](
-                            stripe_features_H_3.squeeze(-1))  # normalize for angular softmax
-                features_H_3.append(stripe_features_H_3.squeeze())
+                    stripe_features_H_3 = self.bottleneck_3_list[i](
+                        stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
+                else:
+                    stripe_features_H_3 = self.bottleneck_3_list[i](
+                        stripe_features_H_3.squeeze(-1))  # normalize for angular softmax
+            features_H_3.append(stripe_features_H_3.squeeze())
 
-            features_G_4_1 = features_G_4[:, :, 0:3, :].contiguous().view(batch_size, _dim * 3, -1)
-            features_G_4_2 = features_G_4[:, :, 1:4, :].contiguous().view(batch_size, _dim * 3, -1)
-            features_G_4_3 = features_G_4[:, :, 2:5, :].contiguous().view(batch_size, _dim * 3, -1)
-            features_G_4_4 = features_G_4[:, :, 3:6, :].contiguous().view(batch_size, _dim * 3, -1)
-            for i in range(4):
-                if i == 0:
-                    stripe_features_H_4_conv = self.l4_conv_list[i][0](
-                        features_G_4_1)
-                    stripe_features_H_4 = self.l4_conv_list[i][1:](
-                        stripe_features_H_4_conv.unsqueeze(-1))
-                if i == 1:
-                    stripe_features_H_4_conv = self.l4_conv_list[i][0](
-                        features_G_4_2)
-                    stripe_features_H_4 = self.l4_conv_list[i][1:](
-                        stripe_features_H_4_conv.unsqueeze(-1))
-                if i == 2:
-                    stripe_features_H_4_conv = self.l4_conv_list[i][0](
-                        features_G_4_3)
-                    stripe_features_H_4 = self.l4_conv_list[i][1:](
-                        stripe_features_H_4_conv.unsqueeze(-1))
-                if i == 3:
-                    stripe_features_H_4_conv = self.l4_conv_list[i][0](
-                        features_G_4_4)
-                    stripe_features_H_4 = self.l4_conv_list[i][1:](
-                        stripe_features_H_4_conv.unsqueeze(-1))
+        features_G_4_1 = features_G_4[:, :, 0:3, :].contiguous().view(batch_size, _dim * 3, -1)
+        features_G_4_2 = features_G_4[:, :, 1:4, :].contiguous().view(batch_size, _dim * 3, -1)
+        features_G_4_3 = features_G_4[:, :, 2:5, :].contiguous().view(batch_size, _dim * 3, -1)
+        features_G_4_4 = features_G_4[:, :, 3:6, :].contiguous().view(batch_size, _dim * 3, -1)
+        for i in range(4):
+            if i == 0:
+                stripe_features_H_4_conv = self.l4_conv_list[i][0](
+                    features_G_4_1)
+                stripe_features_H_4 = self.l4_conv_list[i][1:](
+                    stripe_features_H_4_conv.unsqueeze(-1))
+            if i == 1:
+                stripe_features_H_4_conv = self.l4_conv_list[i][0](
+                    features_G_4_2)
+                stripe_features_H_4 = self.l4_conv_list[i][1:](
+                    stripe_features_H_4_conv.unsqueeze(-1))
+            if i == 2:
+                stripe_features_H_4_conv = self.l4_conv_list[i][0](
+                    features_G_4_3)
+                stripe_features_H_4 = self.l4_conv_list[i][1:](
+                    stripe_features_H_4_conv.unsqueeze(-1))
+            if i == 3:
+                stripe_features_H_4_conv = self.l4_conv_list[i][0](
+                    features_G_4_4)
+                stripe_features_H_4 = self.l4_conv_list[i][1:](
+                    stripe_features_H_4_conv.unsqueeze(-1))
+            if self.sum:
+                stripe_features_H_pam = self.atten_pam(stripe_features_H_4)
+                stripe_features_H_cam = self.atten_cam(stripe_features_H_4)
+                stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
+            if self.neck == 'no':
+                stripe_features_H_4 = stripe_features_H_4
+            elif self.neck == 'bnneck':
                 if self.sum:
-                    stripe_features_H_pam = self.atten_pam(stripe_features_H_4)
-                    stripe_features_H_cam = self.atten_cam(stripe_features_H_4)
-                    stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
-                if self.neck == 'no':
-                    stripe_features_H_4 = stripe_features_H_4
-                elif self.neck == 'bnneck':
-                    if self.sum:
-                        stripe_features_H_4 = self.bottleneck_4_list[i](
-                            stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
-                    else:
-                        stripe_features_H_4 = self.bottleneck_4_list[i](
-                            stripe_features_H_4.squeeze(-1))  # normalize for angular softmax
-                features_H_4.append(stripe_features_H_4.squeeze())
+                    stripe_features_H_4 = self.bottleneck_4_list[i](
+                        stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
+                else:
+                    stripe_features_H_4 = self.bottleneck_4_list[i](
+                        stripe_features_H_4.squeeze(-1))  # normalize for angular softmax
+            features_H_4.append(stripe_features_H_4.squeeze())
 
-            features_G_5_1 = features_G_5[:, :, 0:2, :].contiguous().view(batch_size, _dim * 2, -1)
-            features_G_5_2 = features_G_5[:, :, 1:3, :].contiguous().view(batch_size, _dim * 2, -1)
-            features_G_5_3 = features_G_5[:, :, 2:4, :].contiguous().view(batch_size, _dim * 2, -1)
-            features_G_5_4 = features_G_5[:, :, 3:5, :].contiguous().view(batch_size, _dim * 2, -1)
-            features_G_5_5 = features_G_5[:, :, 4:6, :].contiguous().view(batch_size, _dim * 2, -1)
-            for i in range(4):
-                if i == 0:
-                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
-                        features_G_5_1)
-                    stripe_features_H_5 = self.l5_conv_list[i][1:](
-                        stripe_features_H_5_conv.unsqueeze(-1))
-                if i == 1:
-                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
-                        features_G_5_2)
-                    stripe_features_H_5 = self.l5_conv_list[i][1:](
-                        stripe_features_H_5_conv.unsqueeze(-1))
-                if i == 2:
-                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
-                        features_G_5_3)
-                    stripe_features_H_5 = self.l5_conv_list[i][1:](
-                        stripe_features_H_5_conv.unsqueeze(-1))
-                if i == 3:
-                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
-                        features_G_5_4)
-                    stripe_features_H_5 = self.l5_conv_list[i][1:](
-                        stripe_features_H_5_conv.unsqueeze(-1))
-                if i == 4:
-                    stripe_features_H_5_conv = self.l5_conv_list[i][0](
-                        features_G_5_5)
-                    stripe_features_H_5 = self.l5_conv_list[i][1:](
-                        stripe_features_H_5_conv.unsqueeze(-1))
+        features_G_5_1 = features_G_5[:, :, 0:2, :].contiguous().view(batch_size, _dim * 2, -1)
+        features_G_5_2 = features_G_5[:, :, 1:3, :].contiguous().view(batch_size, _dim * 2, -1)
+        features_G_5_3 = features_G_5[:, :, 2:4, :].contiguous().view(batch_size, _dim * 2, -1)
+        features_G_5_4 = features_G_5[:, :, 3:5, :].contiguous().view(batch_size, _dim * 2, -1)
+        features_G_5_5 = features_G_5[:, :, 4:6, :].contiguous().view(batch_size, _dim * 2, -1)
+        for i in range(5):
+            if i == 0:
+                stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                    features_G_5_1)
+                stripe_features_H_5 = self.l5_conv_list[i][1:](
+                    stripe_features_H_5_conv.unsqueeze(-1))
+            if i == 1:
+                stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                    features_G_5_2)
+                stripe_features_H_5 = self.l5_conv_list[i][1:](
+                    stripe_features_H_5_conv.unsqueeze(-1))
+            if i == 2:
+                stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                    features_G_5_3)
+                stripe_features_H_5 = self.l5_conv_list[i][1:](
+                    stripe_features_H_5_conv.unsqueeze(-1))
+            if i == 3:
+                stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                    features_G_5_4)
+                stripe_features_H_5 = self.l5_conv_list[i][1:](
+                    stripe_features_H_5_conv.unsqueeze(-1))
+            if i == 4:
+                stripe_features_H_5_conv = self.l5_conv_list[i][0](
+                    features_G_5_5)
+                stripe_features_H_5 = self.l5_conv_list[i][1:](
+                    stripe_features_H_5_conv.unsqueeze(-1))
+            if self.sum:
+                stripe_features_H_pam = self.atten_pam(stripe_features_H_5)
+                stripe_features_H_cam = self.atten_cam(stripe_features_H_5)
+                stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
+            if self.neck == 'no':
+                stripe_features_H_5 = stripe_features_H_5
+            elif self.neck == 'bnneck':
                 if self.sum:
-                    stripe_features_H_pam = self.atten_pam(stripe_features_H_5)
-                    stripe_features_H_cam = self.atten_cam(stripe_features_H_5)
-                    stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
-                if self.neck == 'no':
-                    stripe_features_H_5 = stripe_features_H_5
-                elif self.neck == 'bnneck':
-                    if self.sum:
-                        stripe_features_H_5 = self.bottleneck_5_list[i](
-                            stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
-                    else:
-                        stripe_features_H_5 = self.bottleneck_5_list[i](
-                            stripe_features_H_5.squeeze(-1))  # normalize for angular softmax
-                features_H_5.append(stripe_features_H_4.squeeze())
+                    stripe_features_H_5 = self.bottleneck_5_list[i](
+                        stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
+                else:
+                    stripe_features_H_5 = self.bottleneck_5_list[i](
+                        stripe_features_H_5.squeeze(-1))  # normalize for angular softmax
+            features_H_5.append(stripe_features_H_5.squeeze())
 
         if self.training:
             # [N, C=num_classes]
@@ -540,6 +543,7 @@ class NEW_PCBBaseline(nn.Module):
             logits_list_5 = [self.fc_5_list[i](features_H_5[i].view(batch_size, -1))
                              for i in range(5)]
             logits_list = logits_list_1 + logits_list_2 + logits_list_3 + logits_list_4 + logits_list_5
+
             features_H_1 = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
             if self.arc:
                 cls_score = self.arcface(feat, label)
@@ -550,10 +554,10 @@ class NEW_PCBBaseline(nn.Module):
         else:
             if self.neck_feat == 'after':
                 # print("Test with feature after BN")
-                return feat, torch.stack(features_H, dim=2), torch.stack(features_H_2, dim=2)
+                return feat, torch.stack(features_H_1, dim=2), torch.stack(features_H_2, dim=2)
             else:
                 # print("Test with feature before BN")
-                return global_feat, torch.stack(features_H, dim=2), torch.stack(features_H_2, dim=2)
+                return global_feat, torch.stack(features_H_1, dim=2), torch.stack(features_H_2, dim=2)
 
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path)
