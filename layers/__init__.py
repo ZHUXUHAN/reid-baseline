@@ -83,6 +83,7 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
     elif cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_center':
         triplet = TripletLoss(cfg.SOLVER.MARGIN)  # triplet loss
         center_criterion = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, use_gpu=True)  # center loss
+        center_criterion_local = CenterLoss(num_classes=num_classes, feat_dim=5120, use_gpu=True)  # center loss
 
     else:
         print('expected METRIC_LOSS_TYPE with center should be center, triplet_center'
@@ -119,21 +120,22 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
                            global_loss + \
                            cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
                            sum(xent(s, target) for s in local_score) / len(local_score)
-                           # sum(local_loss(tripletloss_local, f.unsqueeze(-1), pinds, ginds, target)[0] for f in local_feat)/ len(local_feat)
-
+                    # sum(local_loss(tripletloss_local, f.unsqueeze(-1), pinds, ginds, target)[0] for f in
+                    # local_feat)/ len(local_feat)
                 elif cfg.MODEL.NEW_PCB:
                     global_loss = triplet(feat, target)[0]
                     local_loss = triplet(local_feat, target)[0]
-                    return xent(score, target) + \
+                    return 0.5*xent(score, target) + \
                            global_loss + local_loss + \
                            cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
-                           sum(xent(s, target) for s in local_score) / len(local_score)
-                           # sum(xent(s, target) for s in local_score_2) / len(local_score_2)
+                           0.5*sum(xent(s, target) for s in local_score) / len(local_score) + \
+                           cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion_local(local_feat, target)
+                        # sum(xent(s, target) for s in local_score_2) / len(local_score_2)
                 elif cfg.MODEL.MGN:
                     return sum(F.cross_entropy(s, target) for s in score) / len(score) + \
                            sum(triplet(f, target)[0] for f in feat) / len(feat)
-                           # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(local_feat, target)
-                           # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
+                    # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(local_feat, target)
+                    # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
 
                     # sum(xent(s, target) for s in score) / len(score) + \
 
