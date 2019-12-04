@@ -15,7 +15,10 @@
  |100|83.5|82.7|
  |110|
  |120|
-
+### test-results
+|k1|k2|l|l_w|map|rank1|
+|:---:|:---:|:---:|:---:|
+|||||
 ## E2: loss-weight 
 ### triplet-loss:id-loss:center-loss = 1:0.5:0.005
  |Epoch|Rank1|Map|
