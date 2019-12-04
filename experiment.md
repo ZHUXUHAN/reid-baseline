@@ -1,6 +1,6 @@
 # New PCB
 ## E1: loss-weight 
-## triplet-loss:id-loss:center-loss = 1:0.5:0.0005
+### triplet-loss:id-loss:center-loss = 1:0.5:0.0005
 |Epoch|Rank1|Map|
 |:----:|:----:|:----:|
 |10|||
