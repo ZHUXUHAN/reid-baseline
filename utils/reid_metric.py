@@ -33,7 +33,7 @@ class R1_mAP(Metric):
         self.camids = []
 
     def update(self, output):
-        feat, local_feat, local_feat_2, pid, camid, flip_feat, flip_local_feat, flip_local_feat_2 = output
+        feat, pid, camid = output
         self.feats.append(feat)
         self.pids.extend(np.asarray(pid))
         self.camids.extend(np.asarray(camid))
@@ -174,10 +174,13 @@ class R1_mAP_reranking(Metric):
         elif self.new_pcb_test:
             feat, local_feat, local_feat_2, pid, camid, flip_feat, flip_local_feat, flip_local_feat_2 = output
             # feat = (feat + flip_feat) / 2
+            # feat = torch.cat((feat, flip_feat), 1)
+            # print(feat.shape)
             local_feat = local_feat.view(local_feat.size(0), -1)
             flip_local_feat = flip_local_feat.view(flip_local_feat.size(0), -1)
             # local_feat = (local_feat + flip_local_feat) / 2
             local_feat_2 = (flip_local_feat_2+local_feat_2)/2
+            # local_feat = torch.cat((local_feat, flip_local_feat), 1)
             # print(torch.cat((feat, local_feat), 1).shape)
             # feat = torch.cat((feat, local_feat), 1)
             self.feats.append(feat)
@@ -496,7 +499,14 @@ class R1_mAP_reranking(Metric):
                 local_g_g_dist = self.compute_dist(
                     local_gf.cpu().detach().numpy(), local_gf.cpu().detach().numpy(),
                     type='euclidean')
+                l_w = 0.85
+                global_local_g_g_dist = global_g_g_dist * l_w
+                global_local_q_g_dist = global_q_g_dist * l_w
+                global_local_q_q_dist = global_q_q_dist * l_w
 
+                global_local_g_g_dist += local_g_g_dist * (1 - l_w)
+                global_local_q_g_dist += local_q_g_dist * (1 - l_w)
+                global_local_q_q_dist += local_q_q_dist * (1 - l_w)
 
 
             else:
@@ -521,40 +531,43 @@ class R1_mAP_reranking(Metric):
                 for k1 in range(6, 8, 1):
                     for k2 in range(3, 5, 1):
                         for l in [0.77, 0.78, 0.79, 0.80, 0.81, 0.82, 0.83, 0.84, 0.85, 0.86, 0.87, 0.88]:  #
-                            for l_w in [0.849, 0.850, 0.851, 0.852, 0.853, 0.854, 0.855]:
-                                global_local_g_g_dist = global_g_g_dist * l_w
-                                global_local_q_g_dist = global_q_g_dist * l_w
-                                global_local_q_q_dist = global_q_q_dist * l_w
+                            # for l_w in [0.850, 0.851, 0.852, 0.853, 0.854, 0.855, 0.856]:
+                            if self.aligned_test or self.pcb_test or self.new_pcb_test:
 
-                                global_local_g_g_dist += local_g_g_dist * (1 - l_w)
-                                global_local_q_g_dist += local_q_g_dist * (1 - l_w)
-                                global_local_q_q_dist += local_q_q_dist * (1 - l_w)
-                                if self.aligned_test or self.pcb_test or self.new_pcb_test:
-                                    distmat = aligned_re_ranking(
-                                        global_local_q_g_dist, global_local_q_q_dist, global_local_g_g_dist, k1=k1, k2=k2,
-                                        lambda_value=l)
-                                    cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
-                                    for r in [1]:
-                                        if max < (mAP + cmc[r - 1]) / 2:
-                                            max = (mAP + cmc[r - 1]) / 2
-                                            plist = [k1, k2, l]
-                                        print("====k1=%d=====k2=%d=====l=%f=====l_w=%f" % (k1, k2, l, l_w))
-                                        print("CMC curve, Rank-%d:%.4f, map:%.4f, final: %.4f" % (
-                                            r, cmc[r - 1], mAP, (mAP + cmc[r - 1]) / 2))
-                                else:
-                                    # distmat = re_ranking(qf, gf, k1=k1, k2=k2, lambda_value=l)
-                                    distmat = aligned_re_ranking(
-                                        global_local_q_g_dist, global_local_q_q_dist, global_local_g_g_dist, k1=k1, k2=k2,
-                                        lambda_value=l)
+                                distmat = aligned_re_ranking(
+                                    global_local_q_g_dist, global_local_q_q_dist, global_local_g_g_dist, k1=k1, k2=k2,
+                                    lambda_value=l)
 
-                                    cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
-                                    for r in [1]:
-                                        if max < (mAP + cmc[r - 1]) / 2:
-                                            max = (mAP + cmc[r - 1]) / 2
-                                            plist = [k1, k2, l]
-                                        print("====k1=%d=====k2=%d=====l=%f" % (k1, k2, l))
-                                        print("CMC curve, Rank-%d:%.4f, map:%.4f, final: %.4f" % (
-                                            r, cmc[r - 1], mAP, (mAP + cmc[r - 1]) / 2))
+                                # distmat_g = aligned_re_ranking(
+                                #     global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=k1, k2=k2,
+                                #     lambda_value=l)
+                                # distmat_l = aligned_re_ranking(
+                                #     local_q_g_dist, local_q_q_dist, local_g_g_dist, k1=k1, k2=k2,
+                                #     lambda_value=l)
+                                # distmat = l_w*distmat_g + (1-l_w)*distmat_l
+
+                                cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
+                                for r in [1]:
+                                    if max < (mAP + cmc[r - 1]) / 2:
+                                        max = (mAP + cmc[r - 1]) / 2
+                                        plist = [k1, k2, l, mAP, cmc[r - 1]]
+                                    print("====k1=%d=====k2=%d=====l=%f=====l_w=%f" % (k1, k2, l, 0.00))
+                                    print("CMC curve, Rank-%d:%.4f, map:%.4f, final: %.4f" % (
+                                        r, cmc[r - 1], mAP, (mAP + cmc[r - 1]) / 2))
+                            else:
+                                # distmat = re_ranking(qf, gf, k1=k1, k2=k2, lambda_value=l)
+                                distmat = aligned_re_ranking(
+                                    global_local_q_g_dist, global_local_q_q_dist, global_local_g_g_dist, k1=k1, k2=k2,
+                                    lambda_value=l)
+
+                                cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
+                                for r in [1]:
+                                    if max < (mAP + cmc[r - 1]) / 2:
+                                        max = (mAP + cmc[r - 1]) / 2
+                                        plist = [k1, k2, l, l_w]
+                                    print("====k1=%d=====k2=%d=====l=%f" % (k1, k2, l))
+                                    print("CMC curve, Rank-%d:%.4f, map:%.4f, final: %.4f" % (
+                                        r, cmc[r - 1], mAP, (mAP + cmc[r - 1]) / 2))
                 print(max, plist)
             else:
                 if self.aligned_test or self.pcb_test or self.new_pcb_test:
