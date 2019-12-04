@@ -322,7 +322,7 @@ class NEW_PCBBaseline(nn.Module):
 
     def forward(self, x, label):
         features_G = self.base(x)
-        global_feat = self.gap_avg(features_G) + self.gap_max(features_G) # (b, 2048, 1, 1)
+        global_feat = self.gap_avg(features_G) #+ self.gap_max(features_G) # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
         if self.neck == 'no':
@@ -331,15 +331,14 @@ class NEW_PCBBaseline(nn.Module):
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
         # [N, C, H, W]
-
-        features_G_1 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
-        features_G_2 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
-        features_G_3 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
-        features_G_4 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
-        features_G_5 = self.local_avgpool_avg(features_G)+self.local_avgpool_max(features_G)
-
-        assert features_G_1.size(
+        assert features_G.size(
             2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides'
+
+        features_G_1 = self.local_avgpool_avg(features_G)#+self.local_avgpool_max(features_G)
+        features_G_2 = self.local_avgpool_avg(features_G)#+self.local_avgpool_max(features_G)
+        features_G_3 = self.local_avgpool_avg(features_G)#+self.local_avgpool_max(features_G)
+        features_G_4 = self.local_avgpool_avg(features_G)#+self.local_avgpool_max(features_G)
+        features_G_5 = self.local_avgpool_avg(features_G)#+self.local_avgpool_max(features_G)
 
         if self.dropout and self.training:
             features_G_1 = self.dropout_layer(features_G_1)  # dropout only used in training
@@ -541,7 +540,7 @@ class NEW_PCBBaseline(nn.Module):
             logits_list = logits_list_1 + logits_list_2 + logits_list_3 + logits_list_4 + logits_list_5
             features_H = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
             features_H = torch.stack(features_H, dim=2)
-            features_H = features_H_1.view(features_H.size(0), -1)
+            features_H = features_H.view(features_H.size(0), -1)
             if self.arc:
                 cls_score = self.arcface(feat, label)
             else:
