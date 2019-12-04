@@ -43,4 +43,4 @@
 ### hidden-dim:512
 
 ## E4: lr_solver
-### base_lr:0.0035 steps:[30,60,90] warmup_iters 100
+### base_lr:0.0035 steps:[30,60,90] warmup_iters:100
