@@ -8,11 +8,18 @@ MODEL.NAME "('resnet50_ibn_a')" \
 DATASETS.NAMES "('market1501')" \
 DATASETS.ROOT_DIR "('/home/zxh/datasets')" \
 MODEL.PRETRAIN_PATH "('/home/zxh/.cache/torch/checkpoints/r50_ibn_a.pth')" \
-OUTPUT_DIR "('new_experiment/r50_ibn_down')" \
-MODEL.PCB True \
+OUTPUT_DIR "('new_experiment/r50_ibn_pcb_newlr')" \
+MODEL.PCB True  \
 INPUT.SIZE_TRAIN "([384, 128])" \
+INPUT.SIZE_TEST "([384, 128])" \
 INPUT.RE_PROB 0.3 \
 MODEL.PCB_RPP False \
-MODEL.USE_FOCAL_LOSS True \
+MODEL.USE_FOCAL_LOSS False \
 MODEL.SUM False \
-MODEL.NEW_PCB False
+MODEL.NEW_PCB False \
+SOLVER.IMS_PER_BATCH 64 \
+SOLVER.EVAL_PERIOD 10 \
+SOLVER.STEPS "([30, 60, 90])" \
+SOLVER.BASE_LR 0.0035 \
+SOLVER.WARMUP_ITERS 100
+
