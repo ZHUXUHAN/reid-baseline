@@ -52,11 +52,7 @@ class NEW_PCBBaseline(nn.Module):
         self.gcb = gcb
         self.rpp = rpp
         self.dropout = dropout
-        self.hidden_dim_1 = 256
-        self.hidden_dim_2 = 256 * 5
-        self.hidden_dim_3 = 256 * 4
-        self.hidden_dim_4 = 256 * 3
-        self.hidden_dim_5 = 256 * 2
+        self.hidden_dim = 256
         self.cam = cam
         self.sum = sum
         self.arc = arc
@@ -203,8 +199,8 @@ class NEW_PCBBaseline(nn.Module):
 
         for _ in range(6):
             local_conv = nn.Sequential(
-                nn.Conv1d(2048, self.hidden_dim_1, kernel_size=1),
-                nn.BatchNorm2d(self.hidden_dim_1),
+                nn.Conv1d(2048, self.hidden_dim, kernel_size=1),
+                nn.BatchNorm2d(self.hidden_dim),
                 nn.ReLU(inplace=True))
             local_conv.apply(weights_init_kaiming)
             self.l1_conv_list.append(local_conv)
@@ -254,7 +250,7 @@ class NEW_PCBBaseline(nn.Module):
             self.classifier.apply(weights_init_classifier)  # new add by luo
             # For Part
             for _ in range(self.num_stripes):
-                fc = nn.Linear(self.hidden_dim_1, self.num_classes)
+                fc = nn.Linear(self.hidden_dim, self.num_classes)
                 fc.apply(weights_init_classifier)
                 self.fc_1_list.append(fc)
 
@@ -271,54 +267,54 @@ class NEW_PCBBaseline(nn.Module):
             self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classifier.apply(weights_init_classifier)
             for _ in range(6):
-                fc = nn.Linear(self.hidden_dim_1, self.num_classes, bias=False)
+                fc = nn.Linear(self.hidden_dim, self.num_classes, bias=False)
                 fc.apply(weights_init_classifier)
                 self.fc_1_list.append(fc)
 
-                bottleneck = nn.BatchNorm1d(self.hidden_dim_1)
+                bottleneck = nn.BatchNorm1d(self.hidden_dim)
                 bottleneck.bias.requires_grad_(False)  # no shift
                 bottleneck.apply(weights_init_kaiming)
 
                 self.bottleneck_1_list.append(bottleneck)
             for _ in range(2):
-                fc_2 = nn.Linear(256, self.num_classes, bias=False)
+                fc_2 = nn.Linear(self.hidden_dim, self.num_classes, bias=False)
                 fc_2.apply(weights_init_classifier)
                 self.fc_2_list.append(fc_2)
 
-                bottleneck_2 = nn.BatchNorm1d(256)
+                bottleneck_2 = nn.BatchNorm1d(self.hidden_dim)
                 bottleneck_2.bias.requires_grad_(False)  # no shift
                 bottleneck_2.apply(weights_init_kaiming)
 
                 self.bottleneck_2_list.append(bottleneck_2)
 
             for _ in range(3):
-                fc_3 = nn.Linear(256, self.num_classes, bias=False)
+                fc_3 = nn.Linear(self.hidden_dim, self.num_classes, bias=False)
                 fc_3.apply(weights_init_classifier)
                 self.fc_3_list.append(fc_3)
 
-                bottleneck_3 = nn.BatchNorm1d(256)
+                bottleneck_3 = nn.BatchNorm1d(self.hidden_dim)
                 bottleneck_3.bias.requires_grad_(False)  # no shift
                 bottleneck_3.apply(weights_init_kaiming)
 
                 self.bottleneck_3_list.append(bottleneck_3)
 
             for _ in range(4):
-                fc_4 = nn.Linear(256, self.num_classes, bias=False)
+                fc_4 = nn.Linear(self.hidden_dim, self.num_classes, bias=False)
                 fc_4.apply(weights_init_classifier)
                 self.fc_4_list.append(fc_4)
 
-                bottleneck_4 = nn.BatchNorm1d(256)
+                bottleneck_4 = nn.BatchNorm1d(self.hidden_dim)
                 bottleneck_4.bias.requires_grad_(False)  # no shift
                 bottleneck_4.apply(weights_init_kaiming)
 
                 self.bottleneck_4_list.append(bottleneck_4)
 
             for _ in range(5):
-                fc_5 = nn.Linear(256, self.num_classes, bias=False)
+                fc_5 = nn.Linear(self.hidden_dim, self.num_classes, bias=False)
                 fc_5.apply(weights_init_classifier)
                 self.fc_5_list.append(fc_5)
 
-                bottleneck_5 = nn.BatchNorm1d(256)
+                bottleneck_5 = nn.BatchNorm1d(self.hidden_dim)
                 bottleneck_5.bias.requires_grad_(False)  # no shift
                 bottleneck_5.apply(weights_init_kaiming)
 
@@ -543,25 +539,24 @@ class NEW_PCBBaseline(nn.Module):
             logits_list_5 = [self.fc_5_list[i](features_H_5[i].view(batch_size, -1))
                              for i in range(5)]
             logits_list = logits_list_1 + logits_list_2 + logits_list_3 + logits_list_4 + logits_list_5
-            features_H_1 = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
-            features_H_1 = torch.stack(features_H_1, dim=2)
-            features_H_1 = features_H_1.view(features_H_1.size(0), -1)
-
+            features_H = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
+            features_H = torch.stack(features_H, dim=2)
+            features_H = features_H_1.view(features_H.size(0), -1)
             if self.arc:
                 cls_score = self.arcface(feat, label)
             else:
                 cls_score = self.classifier(feat)
             # global_score global_ft part_score part_ft
-            return cls_score, global_feat, logits_list, features_H_1, logits_list_2, features_H_2
+            return cls_score, global_feat, logits_list, features_H, logits_list_2, features_H_2
         else:
             if self.neck_feat == 'after':
                 # print("Test with feature after BN")
-                features_H_1 = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
-                return feat, torch.stack(features_H_1, dim=2), torch.stack(features_H_2, dim=2)
+                features_H = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
+                return feat, torch.stack(features_H, dim=2), torch.stack(features_H_2, dim=2)
             else:
-                features_H_1 = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
+                features_H = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
                 # print("Test with feature before BN")
-                return global_feat, torch.stack(features_H_1, dim=2), torch.stack(features_H_2, dim=2)
+                return global_feat, torch.stack(features_H, dim=2), torch.stack(features_H_2, dim=2)
 
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path)
