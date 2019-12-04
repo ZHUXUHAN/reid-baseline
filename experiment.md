@@ -17,7 +17,7 @@
  |120|
 
 ## E2: loss-weight 
-### triplet-loss:id-loss:center-loss = 1:0.5:0.05
+### triplet-loss:id-loss:center-loss = 1:0.5:0.005
  |Epoch|Rank1|Map|
  |:------:|:------:|:------:|
  |10|76.8|76.2|
