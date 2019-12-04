@@ -16,8 +16,8 @@
  |110|
  |120|
 ### test-results
-|k1|k2|l|l_w|map+rank1|
-|:---:|:---:|:---:|:---:|
+|k1|k2|l|l_w|map|rank1|(map+rank1)/2|
+|:----:|:----:|:----:|:----:|
 |6|3|0.78|
 ## E2: loss-weight 
 ### triplet-loss:id-loss:center-loss = 1:0.5:0.005
