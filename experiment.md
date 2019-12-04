@@ -16,3 +16,5 @@
  |110|
  |120|
 
+## E2: loss-weight 
+### triplet-loss:id-loss:center-loss = 1:0.5:0.05
