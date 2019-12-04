@@ -347,8 +347,8 @@ class NEW_PCBBaseline(nn.Module):
 
         if self.dropout and self.training:
             features_G_1 = self.dropout_layer(features_G_1)  # dropout only used in training
-            features_G_2 = self.dropout_layer(features_G_2)  # dropout only used in training
-            features_G_3 = self.dropout_layer(features_G_3)  # dropout only used in training
+            features_G_2 = self.dropout_layer(features_G_2)
+            features_G_3 = self.dropout_layer(features_G_3)
         # [N, C=256, H=S, W=1]
         features_H_1 = []
         features_H_2 = []
@@ -543,8 +543,10 @@ class NEW_PCBBaseline(nn.Module):
             logits_list_5 = [self.fc_5_list[i](features_H_5[i].view(batch_size, -1))
                              for i in range(5)]
             logits_list = logits_list_1 + logits_list_2 + logits_list_3 + logits_list_4 + logits_list_5
-
             features_H_1 = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
+            features_H_1 = torch.stack(features_H_1, dim=2)
+            features_H_1 = features_H_1.view(features_H_1.size(0), -1)
+
             if self.arc:
                 cls_score = self.arcface(feat, label)
             else:
@@ -554,8 +556,10 @@ class NEW_PCBBaseline(nn.Module):
         else:
             if self.neck_feat == 'after':
                 # print("Test with feature after BN")
+                features_H_1 = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
                 return feat, torch.stack(features_H_1, dim=2), torch.stack(features_H_2, dim=2)
             else:
+                features_H_1 = features_H_1 + features_H_2 + features_H_3 + features_H_4 + features_H_5
                 # print("Test with feature before BN")
                 return global_feat, torch.stack(features_H_1, dim=2), torch.stack(features_H_2, dim=2)
 
