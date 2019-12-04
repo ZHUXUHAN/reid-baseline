@@ -41,3 +41,6 @@
 |7|3|0.79|0.85|...|...|85.19|
 ## E3: hidden-dim
 ### hidden-dim:512
+
+## E4: lr_solver
+### base_lr:0.0035 steps:[30,60,90] warmup_iters 100
