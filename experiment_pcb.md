@@ -1,7 +1,7 @@
 # PCB
 ## E1: no erase
 ## base_lr:0.00035 steps:[40,70] warmup_iters:10
-|Epoch|Rank1|Map|
+|Epoch|Map|Rank1|
  |:------:|:------:|:------:|
  |10|78.2|78.9|
  |20|82.2|82.7|
@@ -18,7 +18,7 @@
  
 ## E2: erase 0.3
 ## base_lr:0.00035 steps:[40,70] warmup_iters:10
-|Epoch|Rank1|Map|
+|Epoch|Map|Rank1|
  |:------:|:------:|:------:|
  |10|76.8|77.4|
  |20|81.2|81.1|
@@ -35,7 +35,7 @@
  
 ## E3: lr_solver + erase0.3
 ### base_lr:0.00035 steps:[30,60,90] warmup_iters:10
-|Epoch|Rank1|Map|
+|Epoch|Map|Rank1|
  |:------:|:------:|:------:|
  |10|76.8|77.4|
  |20|81.2|81.1|
