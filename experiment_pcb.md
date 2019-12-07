@@ -16,7 +16,7 @@
  |110|84.8|83.8|
  |120|84.7|83.9|
  
-## E2: erase 0.3
+## E2: erase 0.3 + patchgenerator
 ## base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Rank1|Map|
  |:------:|:------:|:------:|
