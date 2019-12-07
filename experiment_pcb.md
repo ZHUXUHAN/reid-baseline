@@ -32,18 +32,13 @@
  |100|85.3|84.3|
  |110|85.3|84.4|
  |120|85.3|84.4|
- 
-## E3: lr_solver + erase0.3
-### base_lr:0.00035 steps:[30,60,90] warmup_iters:10
-|Epoch|Map|Rank1|
- |:------:|:------:|:------:|
 
-## E4: patchgenerator + erase0.3
+## E3: patchgenerator + erase0.3
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
  
- ## E5: randomaffine + erase0.3
+ ## E4: randomaffine + erase0.3
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
