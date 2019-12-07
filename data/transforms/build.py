@@ -17,7 +17,8 @@ def build_transforms(cfg, is_train=True):
         transform = T.Compose([
             T.Resize(cfg.INPUT.SIZE_TRAIN),
             T.RandomHorizontalFlip(p=cfg.INPUT.PROB),
-#             RandomResize(384, 128),
+            # RandomResize(384, 128),
+            T.RandomAffine(degrees=0, translate=(5, 5), fillcolor=PIXEL_MEAN),
             T.Pad(cfg.INPUT.PADDING),
             T.RandomCrop(cfg.INPUT.SIZE_TRAIN),
             T.ToTensor(),
