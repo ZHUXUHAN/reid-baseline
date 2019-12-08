@@ -1,161 +1,358 @@
 # encoding: utf-8
 """
-@author:  liaoxingyu
+@author:  sherlock
 @contact: sherlockliao01@gmail.com
 """
 
-import torch.nn.functional as F
-
-from .triplet_loss import TripletLoss, CrossEntropyLabelSmooth
-from .center_loss import CenterLoss
-from .local_loss import local_loss
-from .local_triplet import TripletLoss_Local
+import logging
 
 import torch
+import torch.nn as nn
+from ignite.engine import Engine, Events
+from ignite.handlers import ModelCheckpoint, Timer
+from ignite.metrics import RunningAverage
+
+from utils.reid_metric import R1_mAP
+
+global ITER
+ITER = 0
 
 
-def make_loss(cfg, num_classes):  # modified by gu
-    sampler = cfg.DATALOADER.SAMPLER
-    if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet':
-        triplet = TripletLoss(cfg.SOLVER.MARGIN)  # triplet loss
-    else:
-        print('expected METRIC_LOSS_TYPE should be triplet'
-              'but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
+def create_supervised_trainer(model, optimizer, loss_fn, aligned_train, pcb_train, mgn_train, new_pcb_train,
+                              device=None):
+    """
+    Factory function for creating a trainer for supervised models
 
-    if cfg.MODEL.IF_LABELSMOOTH == 'on':
-        xent = CrossEntropyLabelSmooth(num_classes=num_classes)  # new add by luo
-        print("label smooth on, numclasses:", num_classes)
+    Args:
+        model (`torch.nn.Module`): the model to train
+        optimizer (`torch.optim.Optimizer`): the optimizer to use
+        loss_fn (torch.nn loss function): the loss function to use
+        device (str, optional): device type specification (default: None).
+            Applies to both model and batches.
 
-    if sampler == 'softmax':
-        def loss_func(score, feat, target):
-            return F.cross_entropy(score, target)
-    elif cfg.DATALOADER.SAMPLER == 'triplet':
-        def loss_func(score, feat, target):
-            return triplet(feat, target)[0]
-    elif cfg.DATALOADER.SAMPLER == 'softmax_triplet':
-        def loss_func(score, feat, target, local_score, local_feat):
-            if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet':
-                if cfg.MODEL.IF_LABELSMOOTH == 'on':
-                    global_loss = triplet(feat, target)[0]
-                    center_loss = cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
-                    global_score_loss = xent(score, target)
-                    tripletloss_local = TripletLoss_Local(0.3)
-                    if cfg.MODEL.ALIGNED:
-                        pinds, ginds = triplet(feat, target)[3], triplet(feat, target)[4]
-                        return xent(score, target) + \
-                               global_loss + center_loss + \
-                               local_loss(tripletloss_local, local_feat, pinds, ginds, target)[0]
-                    elif cfg.MODEL.PCB:
-                        return xent(score, target) + \
-                               global_loss + \
-                               sum(xent(s, target) for s in local_score) / len(local_score) + \
-                               sum(triplet(f, target)[0] for f in local_feat) / len(local_feat)
+    Returns:
+        Engine: a trainer engine with supervised update function
+    """
+    if device:
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
+        model.to(device)
 
-                    else:
-                        return global_score_loss + global_loss + center_loss
-                else:
-                    if cfg.MODEL.ALIGNED:
-                        return F.cross_entropy(score, target) + triplet(feat, target)[0]
-                    else:
-                        return sum(F.cross_entropy(s, target) for s in score) / len(score) + sum(
-                            triplet(f, target)[0] for f in feat) / len(feat)
+    def _update(engine, batch):
 
-            else:
-                print('expected METRIC_LOSS_TYPE should be triplet'
-                      'but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
-    else:
-        print('expected sampler should be softmax, triplet or softmax_triplet, '
-              'but got {}'.format(cfg.DATALOADER.SAMPLER))
-    return loss_func
-
-
-def make_loss_with_center(cfg, num_classes):  # modified by gu
-    if cfg.MODEL.NAME == 'resnet18' or cfg.MODEL.NAME == 'resnet34':
-        feat_dim = 512
-    elif cfg.MODEL.NAME == 'densenet161':
-        feat_dim = 2208
-    else:
-        feat_dim = 2048
-
-    if cfg.MODEL.METRIC_LOSS_TYPE == 'center':
-        center_criterion = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, use_gpu=True)  # center loss
-
-    elif cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_center':
-        triplet = TripletLoss(cfg.SOLVER.MARGIN)  # triplet loss
-        center_criterion = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, use_gpu=True)  # center loss
-        center_criterion_local = CenterLoss(num_classes=num_classes, feat_dim=5120, use_gpu=True)  # center loss
-
-    else:
-        print('expected METRIC_LOSS_TYPE with center should be center, triplet_center'
-              'but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
-
-    if cfg.MODEL.IF_LABELSMOOTH == 'on':
-        xent = CrossEntropyLabelSmooth(num_classes=num_classes, use_focal=cfg.MODEL.USE_FOCAL_LOSS)  # new add by luo
-        print("label smooth on, numclasses:", num_classes)
-
-    def loss_func(score, feat, target, local_score, local_feat, local_score_2, local_feat_2):  # local_feat
-        if cfg.MODEL.METRIC_LOSS_TYPE == 'center':
-            if cfg.MODEL.IF_LABELSMOOTH == 'on':
-                return xent(score, target) + \
-                       cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
-            else:
-                return F.cross_entropy(score, target) + \
-                       cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
-
-        elif cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_center':
-            if cfg.MODEL.IF_LABELSMOOTH == 'on':
-                if cfg.MODEL.ALIGNED:
-                    tripletloss_local = TripletLoss_Local(0.3)
-                    pinds, ginds = triplet(feat, target)[3], triplet(feat, target)[4]
-                    global_loss = triplet(feat, target)[0]
-                    return xent(score, target) + \
-                           global_loss + \
-                           cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
-                           local_loss(tripletloss_local, local_feat, pinds, ginds, target)[0]
-                elif cfg.MODEL.PCB:
-                    # tripletloss_local = TripletLoss_Local(0.3)
-                    # local_metric_loss = triplet(local_feat, target)[0]
-                    global_loss = triplet(feat, target)[0]
-                    # pinds, ginds = triplet(feat, target)[3], triplet(feat, target)[4]
-                    return cfg.SOLVER.GLOBAL_IDLOSS_WEIGHT*xent(score, target) + \
-                           cfg.SOLVER.GLOBAL_METRICLOSS_WEIGHT*global_loss + \
-                           cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
-                           cfg.SOLVER.LOCAL_IDLOSS_WEIGHT * sum(xent(s, target) for s in local_score) / len(local_score)
-                           # local_loss(tripletloss_local, local_feat.unsqueeze(-1), pinds, ginds, target)[0]
-                           # local_metric_loss
-
-                elif cfg.MODEL.NEW_PCB:#local_metric_loss +
-                    global_metric_loss = triplet(feat, target)[0]
-                    # local_metric_loss = triplet(local_feat, target)[0]
-                    global_id_loss = xent(score, target)
-                    local_id_loss = sum(xent(s, target) for s in local_score) / len(local_score)
-                    return global_id_loss + \
-                           global_metric_loss +  \
-                           cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
-                           local_id_loss
-                           # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion_local(local_feat, target)
-                    # sum(xent(s, target) for s in local_score_2) / len(local_score_2)
-                elif cfg.MODEL.MGN:
-                    return sum(F.cross_entropy(s, target) for s in score) / len(score) + \
-                           sum(triplet(f, target)[0] for f in feat) / len(feat)
-                    # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(local_feat, target)
-                    # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
-
-                    # sum(xent(s, target) for s in score) / len(score) + \
-
-                else:
-                    global_loss = triplet(feat, target)[0]
-                    return xent(score, target) + \
-                           global_loss + \
-                           cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
-
-            else:
-                return F.cross_entropy(score, target) + \
-                       triplet(feat, target)[0] + \
-                       cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target)
-
+        model.train()
+        optimizer.zero_grad()
+        img, target = batch
+        img = img.to(device) if torch.cuda.device_count() >= 1 else img
+        target = target.to(device) if torch.cuda.device_count() >= 1 else target
+        if aligned_train:
+            score, feat, local_feat = model(img)
+            loss = loss_fn(score, feat, target, None, local_feat)
+        elif pcb_train:
+            score, feat, local_score, local_feat, res3_feat, res3_score = model(img, None)
+            loss = loss_fn(score, feat, target, local_score, local_feat, res3_feat, res3_score)
+        elif new_pcb_train:
+            score, feat, local_score, local_feat = model(img, None)
+            loss = loss_fn(score, feat, target, local_score, local_feat)
+        elif mgn_train:
+            score, feat, local_feat = model(img)
+            loss = loss_fn(score, feat, target, None, local_feat)
         else:
-            print('expected METRIC_LOSS_TYPE with center should be center, triplet_center'
-                  'but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
+            score, feat = model(img)
+            loss = loss_fn(score, feat, target, None, None)
+        loss.backward()
+        optimizer.step()
+        if type(score) == tuple:
+            sum_score = 0
+            for s in score:
+                sum_score += (s.max(1)[1] == target).float().mean()
+            acc = sum_score / len(score)
+        else:
+            acc = (score.max(1)[1] == target).float().mean()
+        return loss.item(), acc.item()
 
-    return loss_func, center_criterion
+    return Engine(_update)
+
+
+def create_supervised_trainer_with_center(model, center_criterion, optimizer, optimizer_center, loss_fn,
+                                          cetner_loss_weight,
+                                          aligned_train, pcb_train, mgn_train, arc_train, new_pcb_train, device=None):
+    """
+    Factory function for creating a trainer for supervised models
+
+    Args:
+        model (`torch.nn.Module`): the model to train
+        optimizer (`torch.optim.Optimizer`): the optimizer to use
+        loss_fn (torch.nn loss function): the loss function to use
+        device (str, optional): device type specification (default: None).
+            Applies to both model and batches.
+
+    Returns:
+        Engine: a trainer engine with supervised update function
+    """
+    if device:
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
+        model.to(device)
+
+    def _update(engine, batch):
+        model.train()
+        optimizer.zero_grad()
+        optimizer_center.zero_grad()
+        img, target = batch
+        img = img.to(device) if torch.cuda.device_count() >= 1 else img
+        target = target.to(device) if torch.cuda.device_count() >= 1 else target
+
+        if aligned_train:
+            score, feat, local_feat = model(img)
+            loss = loss_fn(score, feat, target, None, local_feat)
+        elif pcb_train:
+            if arc_train:
+                score, feat, local_score, local_feat = model(img, target)
+            else:
+                score, feat, local_score, local_feat = model(img, None)
+
+            loss = loss_fn(score, feat, target, local_score, local_feat, None, None)
+        elif new_pcb_train:
+            if arc_train:
+                score, feat, local_score, local_feat = model(img, target)
+            else:
+                score, feat, local_score, local_feat, local_score_2, local_feat_2 = model(img, None)
+
+            loss = loss_fn(score, feat, target, local_score, local_feat, local_score_2, local_feat_2)
+        elif mgn_train:
+            score, feat, local_feat = model(img)
+            loss = loss_fn(score, feat, target, None, local_feat, None, None)
+        else:
+            score, feat = model(img)
+            loss = loss_fn(score, feat, target, None, None)
+
+        # print("Total loss is {}, center loss is {}".format(loss, center_criterion(feat, target)))
+        loss.backward()
+        optimizer.step()
+        for param in center_criterion.parameters():
+            param.grad.data *= (1. / cetner_loss_weight)
+        optimizer_center.step()
+
+        # compute acc
+        if type(score) == tuple:
+            sum_score = 0
+            for s in score:
+                sum_score += (s.max(1)[1] == target).float().mean()
+            acc = sum_score / len(score)
+        else:
+            acc = (score.max(1)[1] == target).float().mean()
+
+        return loss.item(), acc.item()
+
+    return Engine(_update)
+
+
+def create_supervised_evaluator(model, metrics,
+                                device=None):
+    """
+    Factory function for creating an evaluator for supervised models
+
+    Args:
+        model (`torch.nn.Module`): the model to train
+        metrics (dict of str - :class:`ignite.metrics.Metric`): a map of metric names to Metrics
+        device (str, optional): device type specification (default: None).
+            Applies to both model and batches.
+    Returns:
+        Engine: an evaluator engine with supervised inference function
+    """
+    if device:
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
+        model.to(device)
+
+    def _inference(engine, batch):
+        model.eval()
+        with torch.no_grad():
+            data, pids, camids, data_flip = batch
+            data = data.to(device) if torch.cuda.device_count() >= 1 else data
+            feat, _ = model(data, None)
+            return feat, pids, camids
+
+    engine = Engine(_inference)
+
+    for name, metric in metrics.items():
+        metric.attach(engine, name)
+
+    return engine
+
+
+def do_train(
+        cfg,
+        model,
+        train_loader,
+        val_loader,
+        optimizer,
+        scheduler,
+        loss_fn,
+        num_query,
+        start_epoch
+):
+    log_period = cfg.SOLVER.LOG_PERIOD
+    checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
+    eval_period = cfg.SOLVER.EVAL_PERIOD
+    output_dir = cfg.OUTPUT_DIR
+    device = cfg.MODEL.DEVICE
+    epochs = cfg.SOLVER.MAX_EPOCHS
+    aligned_train = cfg.MODEL.ALIGNED
+    pcb_train = cfg.MODEL.PCB
+    mgn_train = cfg.MODEL.MGN
+    new_pcb_train = cfg.MODEL.NEW_PCB
+
+    logger = logging.getLogger("reid_baseline.train")
+    logger.info("Start training")
+    trainer = create_supervised_trainer(model, optimizer, loss_fn, aligned_train, pcb_train, mgn_train, new_pcb_train,
+                                        device=device)
+    # evaluator = create_supervised_evaluator(model, metrics={'r1_mAP': R1_mAP(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)}, device=device)
+    checkpointer = ModelCheckpoint(output_dir, cfg.MODEL.NAME, checkpoint_period, n_saved=10, require_empty=False)
+    timer = Timer(average=True)
+
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpointer, {'model': model,
+                                                                     'optimizer': optimizer})
+    timer.attach(trainer, start=Events.EPOCH_STARTED, resume=Events.ITERATION_STARTED,
+                 pause=Events.ITERATION_COMPLETED, step=Events.ITERATION_COMPLETED)
+
+    # average metric to attach on trainer
+    RunningAverage(output_transform=lambda x: x[0]).attach(trainer, 'avg_loss')
+    RunningAverage(output_transform=lambda x: x[1]).attach(trainer, 'avg_acc')
+
+    @trainer.on(Events.STARTED)
+    def start_training(engine):
+        engine.state.epoch = start_epoch
+
+    @trainer.on(Events.EPOCH_STARTED)
+    def adjust_learning_rate(engine):
+        scheduler.step()
+
+    @trainer.on(Events.ITERATION_COMPLETED)
+    def log_training_loss(engine):
+        global ITER
+        ITER += 1
+
+        if ITER % log_period == 0:
+            logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}"
+                        .format(engine.state.epoch, ITER, len(train_loader),
+                                engine.state.metrics['avg_loss'], engine.state.metrics['avg_acc'],
+                                scheduler.get_lr()[0]))
+        if len(train_loader) == ITER:
+            ITER = 0
+
+    # adding handlers using `trainer.on` decorator API
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def print_times(engine):
+        logger.info('Epoch {} done. Time per batch: {:.3f}[s] Speed: {:.1f}[samples/s]'
+                    .format(engine.state.epoch, timer.value() * timer.step_count,
+                            train_loader.batch_size / timer.value()))
+        logger.info('-' * 10)
+        timer.reset()
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def log_validation_results(engine):
+        pass
+        if engine.state.epoch % eval_period == 0:
+            evaluator.run(val_loader)
+            cmc, mAP = evaluator.state.metrics['r1_mAP']
+            logger.info("Validation Results - Epoch: {}".format(engine.state.epoch))
+            logger.info("mAP: {:.1%}".format(mAP))
+            for r in [1, 5, 10]:
+                logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+
+    trainer.run(train_loader, max_epochs=epochs)
+
+
+def do_train_with_center(
+        cfg,
+        model,
+        center_criterion,
+        train_loader,
+        val_loader,
+        optimizer,
+        optimizer_center,
+        scheduler,
+        loss_fn,
+        num_query,
+        start_epoch,
+        datasets
+
+):
+    log_period = cfg.SOLVER.LOG_PERIOD
+    checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
+    eval_period = cfg.SOLVER.EVAL_PERIOD
+    output_dir = cfg.OUTPUT_DIR
+    device = cfg.MODEL.DEVICE
+    epochs = cfg.SOLVER.MAX_EPOCHS
+    mgn_train = cfg.MODEL.MGN
+    aligned_train = cfg.MODEL.ALIGNED
+    pcb_train = cfg.MODEL.PCB
+    arc_train = cfg.MODEL.ARC
+    new_pcb_train = cfg.MODEL.NEW_PCB
+
+    logger = logging.getLogger("reid_baseline.train")
+    logger.info("Start training")
+    trainer = create_supervised_trainer_with_center(model, center_criterion, optimizer, optimizer_center, loss_fn,
+                                                    cfg.SOLVER.CENTER_LOSS_WEIGHT, aligned_train, pcb_train, mgn_train,
+                                                    arc_train, new_pcb_train, device=device)
+    evaluator = create_supervised_evaluator(model, metrics={
+        'r1_mAP': R1_mAP(num_query, False, datasets, max_rank=200, feat_norm=cfg.TEST.FEAT_NORM)}, device=device)
+    checkpointer = ModelCheckpoint(output_dir, cfg.MODEL.NAME, checkpoint_period, n_saved=10, require_empty=False)
+    timer = Timer(average=True)
+
+    trainer.add_event_handler(Events.EPOCH_COMPLETED, checkpointer, {'model': model,
+                                                                     'optimizer': optimizer,
+                                                                     'center_param': center_criterion,
+                                                                     'optimizer_center': optimizer_center})
+
+    timer.attach(trainer, start=Events.EPOCH_STARTED, resume=Events.ITERATION_STARTED,
+                 pause=Events.ITERATION_COMPLETED, step=Events.ITERATION_COMPLETED)
+
+    # average metric to attach on trainer
+    RunningAverage(output_transform=lambda x: x[0]).attach(trainer, 'avg_loss')
+    RunningAverage(output_transform=lambda x: x[1]).attach(trainer, 'avg_acc')
+
+    @trainer.on(Events.STARTED)
+    def start_training(engine):
+        engine.state.epoch = start_epoch
+
+    @trainer.on(Events.EPOCH_STARTED)
+    def adjust_learning_rate(engine):
+        scheduler.step()
+
+    @trainer.on(Events.ITERATION_COMPLETED)
+    def log_training_loss(engine):
+        global ITER
+        ITER += 1
+
+        if ITER % log_period == 0:
+            logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}"
+                        .format(engine.state.epoch, ITER, len(train_loader),
+                                engine.state.metrics['avg_loss'], engine.state.metrics['avg_acc'],
+                                scheduler.get_lr()[0]))
+        if len(train_loader) == ITER:
+            ITER = 0
+
+    # adding handlers using `trainer.on` decorator API
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def print_times(engine):
+        logger.info('Epoch {} done. Time per batch: {:.3f}[s] Speed: {:.1f}[samples/s]'
+                    .format(engine.state.epoch, timer.value() * timer.step_count,
+                            train_loader.batch_size / timer.value()))
+        logger.info('-' * 10)
+        timer.reset()
+
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def log_validation_results(engine):
+        pass
+        if engine.state.epoch % eval_period == 0:
+            evaluator.run(val_loader)
+            cmc, mAP = evaluator.state.metrics['r1_mAP']
+            logger.info("Validation Results - Epoch: {}".format(engine.state.epoch))
+            logger.info("mAP: {:.1%}".format(mAP))
+            for r in [1, 5, 10]:
+                logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+
+    trainer.run(train_loader, max_epochs=epochs)
