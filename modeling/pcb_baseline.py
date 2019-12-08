@@ -168,8 +168,10 @@ class PCBBaseline(nn.Module):
         self.num_classes = num_classes
         self.neck = neck
         self.neck_feat = neck_feat
+        # #PatchGenerator
         self.patch_proposal = PatchGenerator()
         self.part_maxpool = nn.AdaptiveMaxPool2d((1, 1))
+        self.batch_crop = BatchDrop(1, 0.05)
 
         self.base.layer4[0].conv2 = nn.Conv2d(
             512, 512, kernel_size=3, bias=False, stride=1, padding=1)
@@ -243,6 +245,7 @@ class PCBBaseline(nn.Module):
 
     def forward(self, x, label):
         # x = self.stn(x)  #### stn
+        x = self.batch_crop(x)
         global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
