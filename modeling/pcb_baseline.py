@@ -8,6 +8,7 @@ import torch
 from torch import nn
 import os
 import copy
+import torch.nn.functional as F
 
 from .backbones.resnet import ResNet, BasicBlock, Bottleneck
 from .backbones.components.attention import PAM_Module, CAM_Module
@@ -17,6 +18,9 @@ from .backbones.senet_ibn_a import se_resnet101_ibn_a, SEBottleneck
 from .rpp import RPP
 from .arcface_loss import ArcCos
 from .backbones.densenet import densenet121, densenet169, densenet201, densenet161
+from .backbones.inception import inceptionv4
+from .patchgenerator import PatchGenerator
+from .batchdrop import BatchDrop
 
 
 def weights_init_kaiming(m):
@@ -150,6 +154,9 @@ class PCBBaseline(nn.Module):
         elif model_name == 'se_resnet101_ibn_a':
             self.base = se_resnet101_ibn_a(last_stride)
 
+        elif model_name == 'inception':
+            self.base = InceptionNet(last_stride)
+
         if pretrain_choice == 'imagenet':
             if not os.path.exists(model_path):
                assert "No The Pretrained Model"
@@ -161,6 +168,8 @@ class PCBBaseline(nn.Module):
         self.num_classes = num_classes
         self.neck = neck
         self.neck_feat = neck_feat
+        self.patch_proposal = PatchGenerator()
+        self.part_maxpool = nn.AdaptiveMaxPool2d((1, 1))
 
         self.base.layer4[0].conv2 = nn.Conv2d(
             512, 512, kernel_size=3, bias=False, stride=1, padding=1)
@@ -233,6 +242,7 @@ class PCBBaseline(nn.Module):
                 self.bottleneck_list.append(bottleneck)
 
     def forward(self, x, label):
+        # x = self.stn(x)  #### stn
         global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
@@ -242,18 +252,21 @@ class PCBBaseline(nn.Module):
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
         resnet_features = self.base(x)
+        resnet_features_patch = self.patch_proposal(resnet_features)
 
         # [N, C, H, W]
         assert resnet_features.size(
-            2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides'
+            2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides, and the feature shape is {}'.format(resnet_features.shape)
         features_G = self.avgpool(resnet_features)
         if self.dropout and self.training:
             features_G = self.dropout_layer(features_G)  # dropout only used in training
         # [N, C=256, H=S, W=1]
         features_H = []
         for i in range(self.num_stripes):
+            stripe_features_H = F.adaptive_avg_pool2d(resnet_features_patch[i], (1, 1)).squeeze(-1)
+            # print(features_G[:, :, i, :].shape)
             stripe_features_H_conv = self.local_conv_list[i][0](
-                features_G[:, :, i, :])
+                stripe_features_H)#
             stripe_features_H = self.local_conv_list[i][1:](
                 stripe_features_H_conv.unsqueeze(-1))
             if self.sum:
@@ -276,6 +289,8 @@ class PCBBaseline(nn.Module):
             batch_size = x.size(0)
             logits_list = [self.fc_list[i](features_H[i].view(batch_size, -1))
                            for i in range(self.num_stripes)]
+            features_H = torch.stack(features_H, dim=2)
+            features_H = features_H.view(features_H.size(0), -1)
             if self.arc:
                 cls_score = self.arcface(feat, label)
             else:
