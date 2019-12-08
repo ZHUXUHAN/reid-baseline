@@ -318,9 +318,10 @@ class PCBBaseline(nn.Module):
                 cls_score = self.classifier(feat)
             # global_score global_ft part_score part_ft
 
-            return cls_score, global_feat, logits_list, features_H, res3_feat, res3_score
+            return cls_score, feat, logits_list, features_H, res3_feat, res3_score
         else:
             if self.neck_feat == 'after':
+                feat = torch.cat((feat, res3_feat), 1)
                 # print("Test with feature after BN")
                 return feat, torch.stack(features_H, dim=2)
             else:
