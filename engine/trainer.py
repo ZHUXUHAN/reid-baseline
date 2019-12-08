@@ -49,8 +49,8 @@ def create_supervised_trainer(model, optimizer, loss_fn, aligned_train, pcb_trai
             score, feat, local_feat = model(img)
             loss = loss_fn(score, feat, target, None, local_feat)
         elif pcb_train:
-            score, feat, local_score, local_feat = model(img, None)
-            loss = loss_fn(score, feat, target, local_score, local_feat)
+            score, feat, local_score, local_feat, res3_feat, res3_score = model(img, None)
+            loss = loss_fn(score, feat, target, local_score, local_feat, res3_feat, res3_score)
         elif new_pcb_train:
             score, feat, local_score, local_feat = model(img, None)
             loss = loss_fn(score, feat, target, local_score, local_feat)
@@ -110,9 +110,9 @@ def create_supervised_trainer_with_center(model, center_criterion, optimizer, op
             if arc_train:
                 score, feat, local_score, local_feat = model(img, target)
             else:
-                score, feat, local_score, local_feat = model(img, None)
+                score, feat, local_score, local_feat, res3_feat, res3_score = model(img, None)
 
-            loss = loss_fn(score, feat, target, local_score, local_feat, None, None)
+            loss = loss_fn(score, feat, target, local_score, local_feat, res3_score, res3_feat)
         elif new_pcb_train:
             if arc_train:
                 score, feat, local_score, local_feat = model(img, target)
@@ -139,7 +139,7 @@ def create_supervised_trainer_with_center(model, center_criterion, optimizer, op
             sum_score = 0
             for s in score:
                 sum_score += (s.max(1)[1] == target).float().mean()
-            acc = sum_score/len(score)
+            acc = sum_score / len(score)
         else:
             acc = (score.max(1)[1] == target).float().mean()
 
@@ -169,9 +169,9 @@ def create_supervised_evaluator(model, metrics,
     def _inference(engine, batch):
         model.eval()
         with torch.no_grad():
-            data, pids, camids = batch
+            data, pids, camids, data_flip = batch
             data = data.to(device) if torch.cuda.device_count() >= 1 else data
-            feat = model(data)
+            feat, _ = model(data, None)
             return feat, pids, camids
 
     engine = Engine(_inference)
@@ -206,7 +206,8 @@ def do_train(
 
     logger = logging.getLogger("reid_baseline.train")
     logger.info("Start training")
-    trainer = create_supervised_trainer(model, optimizer, loss_fn, aligned_train, pcb_train, mgn_train, new_pcb_train, device=device)
+    trainer = create_supervised_trainer(model, optimizer, loss_fn, aligned_train, pcb_train, mgn_train, new_pcb_train,
+                                        device=device)
     # evaluator = create_supervised_evaluator(model, metrics={'r1_mAP': R1_mAP(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)}, device=device)
     checkpointer = ModelCheckpoint(output_dir, cfg.MODEL.NAME, checkpoint_period, n_saved=10, require_empty=False)
     timer = Timer(average=True)
@@ -253,13 +254,13 @@ def do_train(
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_validation_results(engine):
         pass
-        # if engine.state.epoch % eval_period == 0:
-        #     evaluator.run(val_loader)
-        #     cmc, mAP = evaluator.state.metrics['r1_mAP']
-        #     logger.info("Validation Results - Epoch: {}".format(engine.state.epoch))
-        #     logger.info("mAP: {:.1%}".format(mAP))
-        #     for r in [1, 5, 10]:
-        #         logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+        if engine.state.epoch % eval_period == 0:
+            evaluator.run(val_loader)
+            cmc, mAP = evaluator.state.metrics['r1_mAP']
+            logger.info("Validation Results - Epoch: {}".format(engine.state.epoch))
+            logger.info("mAP: {:.1%}".format(mAP))
+            for r in [1, 5, 10]:
+                logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
 
     trainer.run(train_loader, max_epochs=epochs)
 
@@ -276,6 +277,7 @@ def do_train_with_center(
         loss_fn,
         num_query,
         start_epoch,
+        datasets
 
 ):
     log_period = cfg.SOLVER.LOG_PERIOD
@@ -290,12 +292,13 @@ def do_train_with_center(
     arc_train = cfg.MODEL.ARC
     new_pcb_train = cfg.MODEL.NEW_PCB
 
-
     logger = logging.getLogger("reid_baseline.train")
     logger.info("Start training")
     trainer = create_supervised_trainer_with_center(model, center_criterion, optimizer, optimizer_center, loss_fn,
-                                                    cfg.SOLVER.CENTER_LOSS_WEIGHT, aligned_train, pcb_train, mgn_train, arc_train, new_pcb_train, device=device)
-    # evaluator = create_supervised_evaluator(model, metrics={'r1_mAP': R1_mAP(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)}, device=device)
+                                                    cfg.SOLVER.CENTER_LOSS_WEIGHT, aligned_train, pcb_train, mgn_train,
+                                                    arc_train, new_pcb_train, device=device)
+    evaluator = create_supervised_evaluator(model, metrics={
+        'r1_mAP': R1_mAP(num_query, False, datasets, max_rank=200, feat_norm=cfg.TEST.FEAT_NORM)}, device=device)
     checkpointer = ModelCheckpoint(output_dir, cfg.MODEL.NAME, checkpoint_period, n_saved=10, require_empty=False)
     timer = Timer(average=True)
 
@@ -344,12 +347,12 @@ def do_train_with_center(
     @trainer.on(Events.EPOCH_COMPLETED)
     def log_validation_results(engine):
         pass
-        # if engine.state.epoch % eval_period == 0:
-        #     evaluator.run(val_loader)
-        #     cmc, mAP = evaluator.state.metrics['r1_mAP']
-        #     logger.info("Validation Results - Epoch: {}".format(engine.state.epoch))
-        #     logger.info("mAP: {:.1%}".format(mAP))
-        #     for r in [1, 5, 10]:
-        #         logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+        if engine.state.epoch % eval_period == 0:
+            evaluator.run(val_loader)
+            cmc, mAP = evaluator.state.metrics['r1_mAP']
+            logger.info("Validation Results - Epoch: {}".format(engine.state.epoch))
+            logger.info("mAP: {:.1%}".format(mAP))
+            for r in [1, 5, 10]:
+                logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
 
     trainer.run(train_loader, max_epochs=epochs)
