@@ -114,7 +114,8 @@ def train(cfg):
             scheduler,  # modify for using self trained model
             loss_func,
             num_query,
-            start_epoch  # add for using self trained model
+            start_epoch,
+            datasets# add for using self trained model
         )
     else:
         print("Unsupported value for cfg.MODEL.IF_WITH_CENTER {}, only support yes or no!\n".format(cfg.MODEL.IF_WITH_CENTER))
