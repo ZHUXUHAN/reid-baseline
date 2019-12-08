@@ -233,8 +233,6 @@ class PCBBaseline(nn.Module):
             self.bottleneck.apply(weights_init_kaiming)
             self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classifier.apply(weights_init_classifier)
-            self.classifier_res3 = ClassBlock(1024, self.num_classes, num_bottleneck=2048)
-            self.classifier_res4 = ClassBlock(2048, self.num_classes, num_bottleneck=2048)
             for _ in range(self.num_stripes):
                 fc = nn.Linear(self.hidden_dim, self.num_classes, bias=False)
                 fc.apply(weights_init_classifier)
@@ -247,36 +245,16 @@ class PCBBaseline(nn.Module):
                 self.bottleneck_list.append(bottleneck)
 
     def forward(self, x, label):
-        # x = self.stn(x)  #### stn
-        # x = self.batch_crop(x)
-        # res3_feat = self.base.layer3(x)
-        # res3_feat = self.gap(res3_feat)
-        x = self.base.conv1(x)
-        x = self.base.bn1(x)
-        x = self.base.relu(x)
-        x = self.base.maxpool(x)
-        x = self.base.layer1(x)
-        x = self.base.layer2(x)
-        res3_feat = self.base.layer3(x)
-        x = self.base.layer4(res3_feat)
 
-        res3_feat = self.gap(res3_feat)
-        res3_feat = res3_feat.view(res3_feat.shape[0], -1)  # flatten to (bs, 2048)
-        res3_feat_ori, res3_feat, res3_score = self.classifier_res3(res3_feat)
-
-        # global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
-        global_feat = self.gap(x)
+        global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
-
-        res4_feat_ori, res4_feat, res4_score = self.classifier_res4(global_feat)
 
         if self.neck == 'no':
             feat = global_feat
         elif self.neck == 'bnneck':
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
-        # resnet_features = self.base(x)
-        resnet_features = x
+        resnet_features = self.base(x)
         # resnet_features_patch = self.patch_proposal(resnet_features)
 
         # [N, C, H, W]
@@ -320,21 +298,18 @@ class PCBBaseline(nn.Module):
             features_H = torch.stack(features_H, dim=2)
             features_H = features_H.view(features_H.size(0), -1)
 
-            return res4_score, res4_feat, logits_list, features_H, res3_feat, res3_score
-            # if self.arc:
-            #     cls_score = self.arcface(feat, label)
-            # else:
-            #     cls_score = self.classifier(feat)
+            if self.arc:
+                cls_score = self.arcface(feat, label)
+            else:
+                cls_score = self.classifier(feat)
             # global_score global_ft part_score part_ft
-            # return cls_score, feat, logits_list, features_H, res3_feat, res3_score
+            return cls_score, global_feat, logits_list, features_H
         else:
             if self.neck_feat == 'after':
-                feat = torch.cat((feat, res3_feat), 1)
                 # print("Test with feature after BN")
                 return feat, torch.stack(features_H, dim=2)
             else:
                 # print("Test with feature before BN")
-                torch.cat((global_feat, res3_feat), 1)
                 return global_feat, torch.stack(features_H, dim=2)
 
     def load_param(self, trained_path):
