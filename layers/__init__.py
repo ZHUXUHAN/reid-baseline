@@ -116,13 +116,11 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
                     # tripletloss_local = TripletLoss_Local(0.3)
                     # local_metric_loss = triplet(local_feat, target)[0]
                     global_loss = triplet(feat, target)[0]
-                    res3_loss = triplet(local_feat_2, target)[0]
                     # pinds, ginds = triplet(feat, target)[3], triplet(feat, target)[4]
                     return cfg.SOLVER.GLOBAL_IDLOSS_WEIGHT*xent(score, target) + \
                            cfg.SOLVER.GLOBAL_METRICLOSS_WEIGHT*global_loss + \
                            cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
-                           cfg.SOLVER.LOCAL_IDLOSS_WEIGHT * sum(xent(s, target) for s in local_score) / len(local_score) + \
-                           0.5*res3_loss+0.5*xent(local_score_2, target)
+                           cfg.SOLVER.LOCAL_IDLOSS_WEIGHT * sum(xent(s, target) for s in local_score) / len(local_score)
                            # local_loss(tripletloss_local, local_feat.unsqueeze(-1), pinds, ginds, target)[0]
                            # local_metric_loss
 
