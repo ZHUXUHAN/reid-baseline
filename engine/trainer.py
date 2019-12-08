@@ -110,9 +110,9 @@ def create_supervised_trainer_with_center(model, center_criterion, optimizer, op
             if arc_train:
                 score, feat, local_score, local_feat = model(img, target)
             else:
-                score, feat, local_score, local_feat, res3_feat, res3_score = model(img, None)
+                score, feat, local_score, local_feat = model(img, None)
 
-            loss = loss_fn(score, feat, target, local_score, local_feat, res3_score, res3_feat)
+            loss = loss_fn(score, feat, target, local_score, local_feat, None, None)
         elif new_pcb_train:
             if arc_train:
                 score, feat, local_score, local_feat = model(img, target)
