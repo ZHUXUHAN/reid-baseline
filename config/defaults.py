@@ -164,6 +164,14 @@ _C.SOLVER.EVAL_PERIOD = 50
 # see 2 images per batch
 _C.SOLVER.IMS_PER_BATCH = 64
 
+_C.SOLVER.LOCAL_IDLOSS_WEIGHT = 1.0
+
+_C.SOLVER.LOCAL_METRICLOSS_WEIGHT = 1.0
+
+_C.SOLVER.GLOBAL_IDLOSS_WEIGHT = 1.0
+
+_C.SOLVER.GLOBAL_METRICLOSS_WEIGHT = 1.0
+
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.TEST = CN()
