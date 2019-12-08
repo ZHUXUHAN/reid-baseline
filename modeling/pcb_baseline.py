@@ -21,6 +21,7 @@ from .backbones.densenet import densenet121, densenet169, densenet201, densenet1
 from .backbones.inception import inceptionv4
 from .patchgenerator import PatchGenerator
 from .batchdrop import BatchDrop
+from .classblock import ClassBlock
 
 
 def weights_init_kaiming(m):
@@ -169,9 +170,9 @@ class PCBBaseline(nn.Module):
         self.neck = neck
         self.neck_feat = neck_feat
         # #PatchGenerator
-        self.patch_proposal = PatchGenerator()
-        self.part_maxpool = nn.AdaptiveMaxPool2d((1, 1))
-        self.batch_crop = BatchDrop(1, 0.05)
+        # self.patch_proposal = PatchGenerator()
+        # self.part_maxpool = nn.AdaptiveMaxPool2d((1, 1))
+        # self.batch_crop = BatchDrop(1, 0.05)
 
         self.base.layer4[0].conv2 = nn.Conv2d(
             512, 512, kernel_size=3, bias=False, stride=1, padding=1)
@@ -232,6 +233,7 @@ class PCBBaseline(nn.Module):
             self.bottleneck.apply(weights_init_kaiming)
             self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classifier.apply(weights_init_classifier)
+            self.classifier_res3 = ClassBlock(1024, self.num_classes, num_bottleneck=2048)
             for _ in range(self.num_stripes):
                 fc = nn.Linear(self.hidden_dim, self.num_classes, bias=False)
                 fc.apply(weights_init_classifier)
@@ -245,8 +247,23 @@ class PCBBaseline(nn.Module):
 
     def forward(self, x, label):
         # x = self.stn(x)  #### stn
-        x = self.batch_crop(x)
-        global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
+        # x = self.batch_crop(x)
+        # res3_feat = self.base.layer3(x)
+        # res3_feat = self.gap(res3_feat)
+        x = self.base.conv1(x)
+        x = self.base.bn1(x)
+        x = self.base.relu(x)
+        x = self.base.maxpool(x)
+        x = self.base.layer1(x)
+        x = self.base.layer2(x)
+        res3_feat = self.base.layer3(x)
+        x = self.base.layer4(res3_feat)
+
+        res3_feat = self.gap(res3_feat)
+        res3_feat = res3_feat.view(res3_feat.shape[0], -1)  # flatten to (bs, 2048)
+        res3_feat_ori, res3_feat, res3_score = self.classifier_res3(res3_feat)
+        # global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
+        global_feat = self.gap(x)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
         if self.neck == 'no':
@@ -254,8 +271,9 @@ class PCBBaseline(nn.Module):
         elif self.neck == 'bnneck':
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
-        resnet_features = self.base(x)
-        resnet_features_patch = self.patch_proposal(resnet_features)
+        # resnet_features = self.base(x)
+        resnet_features = x
+        # resnet_features_patch = self.patch_proposal(resnet_features)
 
         # [N, C, H, W]
         assert resnet_features.size(
@@ -266,10 +284,10 @@ class PCBBaseline(nn.Module):
         # [N, C=256, H=S, W=1]
         features_H = []
         for i in range(self.num_stripes):
-            stripe_features_H = F.adaptive_avg_pool2d(resnet_features_patch[i], (1, 1)).squeeze(-1)
+            # stripe_features_H = F.adaptive_avg_pool2d(resnet_features_patch[i], (1, 1)).squeeze(-1)
             # print(features_G[:, :, i, :].shape)
             stripe_features_H_conv = self.local_conv_list[i][0](
-                stripe_features_H)#
+                features_G[:, :, i, :])#
             stripe_features_H = self.local_conv_list[i][1:](
                 stripe_features_H_conv.unsqueeze(-1))
             if self.sum:
@@ -299,13 +317,15 @@ class PCBBaseline(nn.Module):
             else:
                 cls_score = self.classifier(feat)
             # global_score global_ft part_score part_ft
-            return cls_score, global_feat, logits_list, features_H
+
+            return cls_score, global_feat, logits_list, features_H, res3_feat, res3_score
         else:
             if self.neck_feat == 'after':
                 # print("Test with feature after BN")
                 return feat, torch.stack(features_H, dim=2)
             else:
                 # print("Test with feature before BN")
+                torch.cat((global_feat, res3_feat), 1)
                 return global_feat, torch.stack(features_H, dim=2)
 
     def load_param(self, trained_path):
