@@ -38,7 +38,7 @@
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
  
- ## E4: randomaffine + erase0.3
+ ## E4: randomaffine(0.05, 0.05) + erase0.3
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
