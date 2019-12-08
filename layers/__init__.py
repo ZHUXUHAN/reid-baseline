@@ -114,23 +114,29 @@ def make_loss_with_center(cfg, num_classes):  # modified by gu
                            local_loss(tripletloss_local, local_feat, pinds, ginds, target)[0]
                 elif cfg.MODEL.PCB:
                     # tripletloss_local = TripletLoss_Local(0.3)
+                    # local_metric_loss = triplet(local_feat, target)[0]
                     global_loss = triplet(feat, target)[0]
+                    res3_loss = triplet(local_feat_2, target)[0]
                     # pinds, ginds = triplet(feat, target)[3], triplet(feat, target)[4]
-                    return xent(score, target) + \
-                           global_loss + \
+                    return cfg.SOLVER.GLOBAL_IDLOSS_WEIGHT*xent(score, target) + \
+                           cfg.SOLVER.GLOBAL_METRICLOSS_WEIGHT*global_loss + \
                            cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
-                           sum(xent(s, target) for s in local_score) / len(local_score)
-                    # sum(local_loss(tripletloss_local, f.unsqueeze(-1), pinds, ginds, target)[0] for f in
-                    # local_feat)/ len(local_feat)
-                elif cfg.MODEL.NEW_PCB:
-                    global_loss = triplet(feat, target)[0]
-                    local_loss = triplet(local_feat, target)[0]
-                    return 0.5*xent(score, target) + \
-                           global_loss + local_loss + \
+                           cfg.SOLVER.LOCAL_IDLOSS_WEIGHT * sum(xent(s, target) for s in local_score) / len(local_score) + \
+                           0.5*res3_loss+0.5*xent(local_score_2, target)
+                           # local_loss(tripletloss_local, local_feat.unsqueeze(-1), pinds, ginds, target)[0]
+                           # local_metric_loss
+
+                elif cfg.MODEL.NEW_PCB:#local_metric_loss +
+                    global_metric_loss = triplet(feat, target)[0]
+                    # local_metric_loss = triplet(local_feat, target)[0]
+                    global_id_loss = xent(score, target)
+                    local_id_loss = sum(xent(s, target) for s in local_score) / len(local_score)
+                    return global_id_loss + \
+                           global_metric_loss +  \
                            cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion(feat, target) + \
-                           0.5*sum(xent(s, target) for s in local_score) / len(local_score) + \
-                           cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion_local(local_feat, target)
-                        # sum(xent(s, target) for s in local_score_2) / len(local_score_2)
+                           local_id_loss
+                           # cfg.SOLVER.CENTER_LOSS_WEIGHT * center_criterion_local(local_feat, target)
+                    # sum(xent(s, target) for s in local_score_2) / len(local_score_2)
                 elif cfg.MODEL.MGN:
                     return sum(F.cross_entropy(s, target) for s in score) / len(score) + \
                            sum(triplet(f, target)[0] for f in feat) / len(feat)
