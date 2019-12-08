@@ -22,6 +22,7 @@ from .backbones.inception import inceptionv4
 from .patchgenerator import PatchGenerator
 from .batchdrop import BatchDrop
 from .classblock import ClassBlock
+from .stn import STN
 
 
 def weights_init_kaiming(m):
@@ -170,8 +171,8 @@ class PCBBaseline(nn.Module):
         self.neck = neck
         self.neck_feat = neck_feat
         # #PatchGenerator
-        # self.patch_proposal = PatchGenerator()
-        # self.part_maxpool = nn.AdaptiveMaxPool2d((1, 1))
+        self.patch_proposal = PatchGenerator()
+        self.part_maxpool = nn.AdaptiveMaxPool2d((1, 1))
         # self.batch_crop = BatchDrop(1, 0.05)
 
         self.base.layer4[0].conv2 = nn.Conv2d(
@@ -179,6 +180,8 @@ class PCBBaseline(nn.Module):
         self.base.layer4[0].downsample = nn.Sequential(
             nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(2048))
+
+        self.stn = STN()
 
         if self.sum:
             print("Building Attention Branch")
@@ -245,7 +248,7 @@ class PCBBaseline(nn.Module):
                 self.bottleneck_list.append(bottleneck)
 
     def forward(self, x, label):
-
+        x = self.stn(x)  #### stn
         global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
@@ -255,7 +258,7 @@ class PCBBaseline(nn.Module):
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
         resnet_features = self.base(x)
-        # resnet_features_patch = self.patch_proposal(resnet_features)
+        resnet_features_patch = self.patch_proposal(resnet_features)
 
         # [N, C, H, W]
         assert resnet_features.size(
@@ -266,10 +269,10 @@ class PCBBaseline(nn.Module):
         # [N, C=256, H=S, W=1]
         features_H = []
         for i in range(self.num_stripes):
-            # stripe_features_H = F.adaptive_avg_pool2d(resnet_features_patch[i], (1, 1)).squeeze(-1)
+            stripe_features_H = F.adaptive_avg_pool2d(resnet_features_patch[i], (1, 1)).squeeze(-1)
             # print(features_G[:, :, i, :].shape)
             stripe_features_H_conv = self.local_conv_list[i][0](
-                features_G[:, :, i, :])#
+                stripe_features_H)#
             local_stripe_features_H = self.local_conv_list[i][1:](
                 stripe_features_H_conv.unsqueeze(-1))
             if self.sum:
