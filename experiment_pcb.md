@@ -86,3 +86,6 @@
  
  ## E6: stn + erase0.3
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
+
+ ## E7: centerloss_weight(0.0008) + erase0.3
+### base_lr:0.00035 steps:[40,70] warmup_iters:10
