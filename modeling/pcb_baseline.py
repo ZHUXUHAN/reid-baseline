@@ -234,6 +234,7 @@ class PCBBaseline(nn.Module):
             self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classifier.apply(weights_init_classifier)
             self.classifier_res3 = ClassBlock(1024, self.num_classes, num_bottleneck=2048)
+            self.classifier_res4 = ClassBlock(2048, self.num_classes, num_bottleneck=2048)
             for _ in range(self.num_stripes):
                 fc = nn.Linear(self.hidden_dim, self.num_classes, bias=False)
                 fc.apply(weights_init_classifier)
@@ -262,9 +263,12 @@ class PCBBaseline(nn.Module):
         res3_feat = self.gap(res3_feat)
         res3_feat = res3_feat.view(res3_feat.shape[0], -1)  # flatten to (bs, 2048)
         res3_feat_ori, res3_feat, res3_score = self.classifier_res3(res3_feat)
+
         # global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
         global_feat = self.gap(x)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
+
+        res4_feat_ori, res4_feat, res4_score = self.classifier_res4(global_feat)
 
         if self.neck == 'no':
             feat = global_feat
@@ -288,11 +292,11 @@ class PCBBaseline(nn.Module):
             # print(features_G[:, :, i, :].shape)
             stripe_features_H_conv = self.local_conv_list[i][0](
                 features_G[:, :, i, :])#
-            stripe_features_H = self.local_conv_list[i][1:](
+            local_stripe_features_H = self.local_conv_list[i][1:](
                 stripe_features_H_conv.unsqueeze(-1))
             if self.sum:
-                stripe_features_H_pam = self.atten_pam(stripe_features_H)
-                stripe_features_H_cam = self.atten_cam(stripe_features_H)
+                stripe_features_H_pam = self.atten_pam(local_stripe_features_H)
+                stripe_features_H_cam = self.atten_cam(local_stripe_features_H)
                 stripe_features_H_sum = self.sum_conv(sum(stripe_features_H_pam, stripe_features_H_cam))
             if self.neck == 'no':
                 stripe_features_H = stripe_features_H
@@ -302,8 +306,11 @@ class PCBBaseline(nn.Module):
                         stripe_features_H_sum.squeeze(-1))  # normalize for angular softmax
                 else:
                     stripe_features_H = self.bottleneck_list[i](
-                        stripe_features_H.squeeze(-1))  # normalize for angular softmax
-            features_H.append(stripe_features_H.squeeze())
+                        local_stripe_features_H.squeeze(-1))  # normalize for angular softmax
+            if self.training:
+                features_H.append(local_stripe_features_H.squeeze())
+            else:
+                features_H.append(stripe_features_H.squeeze())
 
         if self.training:
             # [N, C=num_classes]
@@ -312,13 +319,14 @@ class PCBBaseline(nn.Module):
                            for i in range(self.num_stripes)]
             features_H = torch.stack(features_H, dim=2)
             features_H = features_H.view(features_H.size(0), -1)
-            if self.arc:
-                cls_score = self.arcface(feat, label)
-            else:
-                cls_score = self.classifier(feat)
-            # global_score global_ft part_score part_ft
 
-            return cls_score, feat, logits_list, features_H, res3_feat, res3_score
+            return res4_score, res4_feat, logits_list, features_H, res3_feat, res3_score
+            # if self.arc:
+            #     cls_score = self.arcface(feat, label)
+            # else:
+            #     cls_score = self.classifier(feat)
+            # global_score global_ft part_score part_ft
+            # return cls_score, feat, logits_list, features_H, res3_feat, res3_score
         else:
             if self.neck_feat == 'after':
                 feat = torch.cat((feat, res3_feat), 1)
