@@ -13,6 +13,7 @@ from ignite.handlers import ModelCheckpoint, Timer
 from ignite.metrics import RunningAverage
 
 from utils.reid_metric import R1_mAP
+from utils.reid_metric import R1_mAP_reranking_training
 
 global ITER
 ITER = 0
@@ -298,7 +299,7 @@ def do_train_with_center(
                                                     cfg.SOLVER.CENTER_LOSS_WEIGHT, aligned_train, pcb_train, mgn_train,
                                                     arc_train, new_pcb_train, device=device)
     evaluator = create_supervised_evaluator(model, metrics={
-        'r1_mAP': R1_mAP(num_query, False, datasets, max_rank=200, feat_norm=cfg.TEST.FEAT_NORM)}, device=device)
+        'r1_mAP': R1_mAP_reranking_training(num_query,  max_rank=200, feat_norm=cfg.TEST.FEAT_NORM)}, device=device)
     checkpointer = ModelCheckpoint(output_dir, cfg.MODEL.NAME, checkpoint_period, n_saved=10, require_empty=False)
     timer = Timer(average=True)
 
