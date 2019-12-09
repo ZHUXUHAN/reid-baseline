@@ -135,8 +135,49 @@ class R1_mAP(Metric):
         return cmc, mAP
 
 
+class R1_mAP_reranking_training(Metric):
+    def __init__(self, num_query, max_rank=50, feat_norm='yes'):
+        super(R1_mAP_reranking_training, self).__init__()
+        self.num_query = num_query
+        self.max_rank = max_rank
+        self.feat_norm = feat_norm
+
+    def reset(self):
+        self.feats = []
+        self.pids = []
+        self.camids = []
+
+    def update(self, output):
+        feat, pid, camid = output
+        self.feats.append(feat)
+        self.pids.extend(np.asarray(pid))
+        self.camids.extend(np.asarray(camid))
+
+    def compute(self):
+        feats = torch.cat(self.feats, dim=0)
+        if self.feat_norm == 'yes':
+            print("The test feature is normalized")
+            feats = torch.nn.functional.normalize(feats, dim=1, p=2)
+
+        # query
+        qf = feats[:self.num_query]
+        q_pids = np.asarray(self.pids[:self.num_query])
+        q_camids = np.asarray(self.camids[:self.num_query])
+        # gallery
+        gf = feats[self.num_query:]
+        g_pids = np.asarray(self.pids[self.num_query:])
+        g_camids = np.asarray(self.camids[self.num_query:])
+
+        print("Enter reranking")
+        distmat = re_ranking(qf, gf, k1=6, k2=4, lambda_value=0.85)
+        cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
+
+        return cmc, mAP
+
+
 class R1_mAP_reranking(Metric):
-    def __init__(self, num_query, datasets, aligned_test, pcb_test, new_pcb_test, adjust_rerank, savedist_path, merge, max_rank=50,
+    def __init__(self, num_query, datasets, aligned_test, pcb_test, new_pcb_test, adjust_rerank, savedist_path, merge,
+                 max_rank=50,
                  feat_norm='yes'):
         super(R1_mAP_reranking, self).__init__()
         self.num_query = num_query
@@ -164,8 +205,8 @@ class R1_mAP_reranking(Metric):
     def update(self, output):
         if self.aligned_test or self.pcb_test:
             feat, local_feat, pid, camid, flip_feat, flip_local_feat = output
-            feat = (feat+flip_feat)/2
-            local_feat = (local_feat+flip_local_feat)/2
+            feat = (feat + flip_feat) / 2
+            local_feat = (local_feat + flip_local_feat) / 2
             self.feats.append(feat)
             self.local_feats.append(local_feat)
             self.flip_feat.append(flip_feat)
@@ -179,7 +220,7 @@ class R1_mAP_reranking(Metric):
             local_feat = local_feat.view(local_feat.size(0), -1)
             flip_local_feat = flip_local_feat.view(flip_local_feat.size(0), -1)
             # local_feat = (local_feat + flip_local_feat) / 2
-            local_feat_2 = (flip_local_feat_2+local_feat_2)/2
+            local_feat_2 = (flip_local_feat_2 + local_feat_2) / 2
             # local_feat = torch.cat((local_feat, flip_local_feat), 1)
             # print(torch.cat((feat, local_feat), 1).shape)
             # feat = torch.cat((feat, local_feat), 1)
@@ -220,14 +261,14 @@ class R1_mAP_reranking(Metric):
             gallery += gallery
 
         dist_cp = distmat.copy()
-        dist_cp.sort(1) #按行排序
-        dist_r1 = dist_cp[:, 0] # 每个query的第一个列 即第一个元素
-        rank1 = np.argsort(dist_r1) #对所有的第一个的距离排序的index
+        dist_cp.sort(1)  # 按行排序
+        dist_r1 = dist_cp[:, 0]  # 每个query的第一个列 即第一个元素
+        rank1 = np.argsort(dist_r1)  # 对所有的第一个的距离排序的index
         dist_r1.sort()
 
         flags = np.zeros(len(gallery))
         result = {}
-        thr = dist_r1[int(len(rank1) * 0.75)] #距离的75%为阈值 0.150
+        thr = dist_r1[int(len(rank1) * 0.75)]  # 距离的75%为阈值 0.150
         print('thr', thr)
         # for i in range(len(distmat)):
         for i, query_index in enumerate(rank1):
@@ -249,7 +290,7 @@ class R1_mAP_reranking(Metric):
                 if flags[g] == 1:
                     first = False
                     continue
-                if first: #如果每个query的第一个 就即可存下g的序号
+                if first:  # 如果每个query的第一个 就即可存下g的序号
                     flags[g] = 1
                     first = False
                 if dist_i[g] < thr:
@@ -267,7 +308,6 @@ class R1_mAP_reranking(Metric):
 
         assert num_q == len(query)
         assert num_g == len(gallery)
-
 
         # indices = np.argsort(distmat, axis=1)
         # json_dict = {}
@@ -462,9 +502,9 @@ class R1_mAP_reranking(Metric):
 
                 for i in range(len(local_g_g_dist_all)):  # /len(local_g_g_dist_all)range(len(local_g_g_dist_all))
 
-                    global_local_g_g_dist += local_g_g_dist_all[i]/len(local_g_g_dist_all)
-                    global_local_q_g_dist += local_q_g_dist_all[i]/len(local_g_g_dist_all)
-                    global_local_q_q_dist += local_q_q_dist_all[i]/len(local_g_g_dist_all)
+                    global_local_g_g_dist += local_g_g_dist_all[i] / len(local_g_g_dist_all)
+                    global_local_q_g_dist += local_q_g_dist_all[i] / len(local_g_g_dist_all)
+                    global_local_q_q_dist += local_q_q_dist_all[i] / len(local_g_g_dist_all)
 
                     # flip_global_local_g_g_dist += flip_local_g_g_dist_all[i] / (len(flip_local_g_g_dist_all))
                     # flip_global_local_q_g_dist += flip_local_q_g_dist_all[i] / (len(flip_local_g_g_dist_all))
