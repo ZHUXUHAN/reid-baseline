@@ -1,4 +1,4 @@
-# PCB
+# NEW-PCB
 ## E1: no erase
 ## base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
