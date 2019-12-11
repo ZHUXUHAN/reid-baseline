@@ -181,7 +181,7 @@ class PCBBaseline(nn.Module):
             nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(2048))
 
-        self.stn = STN()
+        # self.stn = STN()
 
         if self.sum:
             print("Building Attention Branch")
@@ -248,7 +248,7 @@ class PCBBaseline(nn.Module):
                 self.bottleneck_list.append(bottleneck)
 
     def forward(self, x, label):
-        x = self.stn(x)  #### stn
+        # x = self.stn(x)  #### stn
         global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
@@ -291,7 +291,7 @@ class PCBBaseline(nn.Module):
             if self.training:
                 features_H.append(local_stripe_features_H.squeeze())
             else:
-                features_H.append(stripe_features_H.squeeze())
+                features_H.append(local_stripe_features_H.squeeze())
 
         if self.training:
             # [N, C=num_classes]
@@ -309,8 +309,9 @@ class PCBBaseline(nn.Module):
             return cls_score, global_feat, logits_list, features_H
         else:
             if self.neck_feat == 'after':
-                # print("Test with feature after BN")
-                return feat, torch.stack(features_H, dim=2)
+                # print("Test with feature after BN") # torch.stack(features_H, dim=2)
+                return feat, torch.cat((features_H[0], features_H[1], features_H[2], features_H[3], features_H[4], \
+                                        features_H[5]), 1)
             else:
                 # print("Test with feature before BN")
                 return global_feat, torch.stack(features_H, dim=2)
