@@ -15,6 +15,7 @@ import sys
 from data.datasets.eval_reid import eval_func
 from .re_ranking import re_ranking
 from .aligned_reranking import aligned_re_ranking
+import gc
 
 
 class R1_mAP(Metric):
@@ -205,8 +206,8 @@ class R1_mAP_reranking(Metric):
     def update(self, output):
         if self.aligned_test or self.pcb_test:
             feat, local_feat, pid, camid, flip_feat, flip_local_feat = output
-            feat = (feat + flip_feat) / 2
-            local_feat = (local_feat + flip_local_feat) / 2
+            # feat = (feat + flip_feat) / 2
+            # local_feat = (local_feat + flip_local_feat) / 2
             self.feats.append(feat)
             self.local_feats.append(local_feat)
             self.flip_feat.append(flip_feat)
@@ -399,6 +400,8 @@ class R1_mAP_reranking(Metric):
             squared_dist = - 2 * np.matmul(array1, array2.T) + square1 + square2
             squared_dist[squared_dist < 0] = 0
             dist = np.sqrt(squared_dist)
+            del square1, square2, squared_dist
+            gc.collect()
             return dist
 
     def compute(self):
@@ -458,125 +461,15 @@ class R1_mAP_reranking(Metric):
                 local_g_g_dist = self.compute_dist(
                     local_gf.cpu().detach().numpy(), local_gf.cpu().detach().numpy(),
                     type='euclidean')
-                l_w = 0.85
-                global_local_g_g_dist = global_g_g_dist * l_w
-                global_local_q_g_dist = global_q_g_dist * l_w
-                global_local_q_q_dist = global_q_q_dist * l_w
 
-                global_local_g_g_dist += local_g_g_dist * (1 - l_w)
-                global_local_q_g_dist += local_q_g_dist * (1 - l_w)
-                global_local_q_q_dist += local_q_q_dist * (1 - l_w)
-
-                # global_feats_1 = np.load('./model_feat/global/diedai/feat.npy')
-                # global_feats_2 = np.load('./model_feat/global/diedai_2/feat.npy')
+                # l_w = 0.85
+                # global_local_g_g_dist = global_g_g_dist * l_w
+                # global_local_q_g_dist = global_q_g_dist * l_w
+                # global_local_q_q_dist = global_q_q_dist * l_w
                 #
-                # feats = np.hstack((global_feats_1, global_feats_2))
-                # feats = torch.nn.functional.normalize(torch.from_numpy(feats), dim=1, p=2)
-                #
-                # local_feats_1 = np.load('./model_feat/local/diedai/local_feat.npy')
-                # local_feats_2 = np.load('./model_feat/local/diedai_2/local_feat.npy')
-                #
-                # local_feats = np.hstack((local_feats_1, local_feats_2))
-                # local_feats = torch.nn.functional.normalize(torch.from_numpy(local_feats), dim=1, p=2)
-                #
-                # print('Feats', feats.shape)
-                # print('Local_Feats', local_feats.shape)
-
-                # flip_qf = flip_feats[:self.num_query]
-                # flip_gf = flip_feats[self.num_query:]
-                # if self.aligned_test or self.pcb_test:
-                #     flip_local_qf = flip_local_feats[:self.num_query]
-                #     flip_local_gf = flip_local_feats[self.num_query:]
-
-                # path_gloabl_dist = os.path.join('./model_feat/global', 'diedai_2')
-                # path_local_dist = os.path.join('./model_feat/local', 'diedai_2')
-                # if not os.path.exists(path_gloabl_dist):
-                #     os.makedirs(path_gloabl_dist)
-                # if not os.path.exists(path_local_dist):
-                #     os.makedirs(path_local_dist)
-                # print(feats.shape)
-                # print(local_feats.shape)
-                # np.save(os.path.join(path_gloabl_dist, 'feat.npy'), feats.cpu())
-                # np.save(os.path.join(path_local_dist, 'local_feat.npy'), local_feats.cpu())
-
-                # global_q_g_dist = self.compute_dist(
-                #     qf.cpu().detach().numpy(), gf.cpu().detach().numpy(), type='euclidean')
-                # global_g_g_dist = self.compute_dist(
-                #     gf.cpu().detach().numpy(), gf.cpu().detach().numpy(), type='euclidean')
-                # global_q_q_dist = self.compute_dist(
-                #     qf.cpu().detach().numpy(), qf.cpu().detach().numpy(), type='euclidean')
-
-                # flip_global_q_g_dist = self.compute_dist(
-                #     flip_qf.cpu().detach().numpy(), flip_gf.cpu().detach().numpy(), type='euclidean')
-                # flip_global_g_g_dist = self.compute_dist(
-                #     flip_gf.cpu().detach().numpy(), flip_gf.cpu().detach().numpy(), type='euclidean')
-                # flip_global_q_q_dist = self.compute_dist(
-                #     flip_qf.cpu().detach().numpy(), flip_qf.cpu().detach().numpy(), type='euclidean')
-
-                # local_q_g_dist_all = []
-                # local_q_q_dist_all = []
-                # local_g_g_dist_all = []
-                #
-                # # flip_local_q_g_dist_all = []
-                # # flip_local_q_q_dist_all = []
-                # # flip_local_g_g_dist_all = []
-                #
-                # if self.pcb_test or self.aligned_test:
-                #     for i in range(local_qf.shape[2]):
-                #         local_q_g_dist = self.compute_dist(
-                #             local_qf[:, :, i].cpu().detach().numpy(), local_gf[:, :, i].cpu().detach().numpy(),
-                #             type='euclidean')  # 1061,2233
-                #         local_q_g_dist_all.append(local_q_g_dist)
-                #
-                #         local_q_q_dist = self.compute_dist(
-                #             local_qf[:, :, i].cpu().detach().numpy(), local_qf[:, :, i].cpu().detach().numpy(),
-                #             type='euclidean')
-                #         local_q_q_dist_all.append(local_q_q_dist)
-                #
-                #         local_g_g_dist = self.compute_dist(
-                #             local_gf[:, :, i].cpu().detach().numpy(), local_gf[:, :, i].cpu().detach().numpy(),
-                #             type='euclidean')
-                #         local_g_g_dist_all.append(local_g_g_dist)
-
-                        #####FLIP####
-                        # flip_local_q_g_dist = self.compute_dist(
-                        #     flip_local_qf[:, :, i].cpu().detach().numpy(),
-                        #     flip_local_gf[:, :, i].cpu().detach().numpy(),
-                        #     type='euclidean')
-                        # flip_local_q_g_dist_all.append(flip_local_q_g_dist)
-                        #
-                        # flip_local_q_q_dist = self.compute_dist(
-                        #     flip_local_qf[:, :, i].cpu().detach().numpy(),
-                        #     flip_local_qf[:, :, i].cpu().detach().numpy(),
-                        #     type='euclidean')
-                        # flip_local_q_q_dist_all.append(flip_local_q_q_dist)
-                        #
-                        # flip_local_g_g_dist = self.compute_dist(flip_local_gf[:, :, i].cpu().detach().numpy(),
-                        #                                         flip_local_gf[:, :, i].cpu().detach().numpy(),
-                        #                                         type='euclidean')
-                        # flip_local_g_g_dist_all.append(flip_local_g_g_dist)
-
-                # global_local_g_g_dist = global_g_g_dist
-                # global_local_q_g_dist = global_q_g_dist
-                # global_local_q_q_dist = global_q_q_dist
-
-                # flip_global_local_g_g_dist = flip_global_g_g_dist
-                # flip_global_local_q_g_dist = flip_global_q_g_dist
-                # flip_global_local_q_q_dist = flip_global_q_q_dist
-                #
-                # for i in range(len(local_g_g_dist_all)):  # /len(local_g_g_dist_all)range(len(local_g_g_dist_all))
-                #
-                #     global_local_g_g_dist += local_g_g_dist_all[i] / len(local_g_g_dist_all)
-                #     global_local_q_g_dist += local_q_g_dist_all[i] / len(local_g_g_dist_all)
-                #     global_local_q_q_dist += local_q_q_dist_all[i] / len(local_g_g_dist_all)
-
-                    # flip_global_local_g_g_dist += flip_local_g_g_dist_all[i] / (len(flip_local_g_g_dist_all))
-                    # flip_global_local_q_g_dist += flip_local_q_g_dist_all[i] / (len(flip_local_g_g_dist_all))
-                    # flip_global_local_q_q_dist += flip_local_q_q_dist_all[i] / (len(flip_local_g_g_dist_all))
-
-                # global_local_q_g_dist += flip_global_local_q_g_dist
-                # global_local_q_q_dist += flip_global_local_q_q_dist
-                # global_local_g_g_dist += flip_global_local_g_g_dist
+                # global_local_g_g_dist += local_g_g_dist * (1 - l_w)
+                # global_local_q_g_dist += local_q_g_dist * (1 - l_w)
+                # global_local_q_q_dist += local_q_q_dist * (1 - l_w)
 
             elif self.new_pcb_test:
 
@@ -639,16 +532,22 @@ class R1_mAP_reranking(Metric):
                                     # distmat = aligned_re_ranking(
                                     #     global_local_q_g_dist, global_local_q_q_dist, global_local_g_g_dist, k1=k1, k2=k2,
                                     #     lambda_value=l)
-                                    distmat_global = re_ranking(qf, gf, k1=6, k2=3, lambda_value=0.80)
-                                    distmat_local = re_ranking(local_qf, local_gf, k1=k1, k2=k2, lambda_value=l)
-                                    distmat = l_w*distmat_global + (1-l_w)*distmat_local
 
-                                    # distmat_g = aligned_re_ranking(
-                                    #     global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=k1, k2=k2,
-                                    #     lambda_value=l)
-                                    # distmat_l = aligned_re_ranking(
-                                    #     local_q_g_dist, local_q_q_dist, local_g_g_dist, k1=k1, k2=k2,
-                                    #     lambda_value=l)
+                                    # distmat_global = re_ranking(qf, gf, k1=6, k2=3, lambda_value=0.80)
+                                    # distmat_local = re_ranking(local_qf, local_gf, k1=k1, k2=k2, lambda_value=l)
+
+                                    distmat_global = aligned_re_ranking(
+                                        global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=k1, k2=k2,
+                                        lambda_value=l)
+                                    del global_q_g_dist, global_q_q_dist, global_g_g_dist
+                                    gc.collect()
+                                    distmat_local = aligned_re_ranking(
+                                        local_q_g_dist, local_q_q_dist, local_g_g_dist, k1=k1, k2=k2,
+                                        lambda_value=l)
+                                    del local_q_g_dist, local_q_q_dist, local_g_g_dist
+                                    gc.collect()
+
+                                    distmat = l_w * distmat_global + (1 - l_w) * distmat_local
 
                                     cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
                                     for r in [1]:
@@ -675,21 +574,42 @@ class R1_mAP_reranking(Metric):
                 print(max, plist)
             else:
                 if self.aligned_test or self.pcb_test or self.new_pcb_test:
-                    distmat = aligned_re_ranking(
-                        global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=6, k2=3, lambda_value=0.80)
+                    distmat_global = aligned_re_ranking(
+                        global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=6, k2=3,
+                        lambda_value=0.80)
+                    del global_q_g_dist, global_q_q_dist, global_g_g_dist
+                    gc.collect()
+                    distmat_local = aligned_re_ranking(
+                        local_q_g_dist, local_q_q_dist, local_g_g_dist, k1=6, k2=3,
+                        lambda_value=0.80)
+                    del local_q_g_dist, local_q_q_dist, local_g_g_dist
+                    gc.collect()
+
+                    distmat = 0.96 * distmat_global + (1 - 0.96) * distmat_local
+                    # distmat = aligned_re_ranking(
+                    #     global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=6, k2=3, lambda_value=0.80)
                     # distmat_global = re_ranking(qf, gf, k1=6, k2=3, lambda_value=0.80)
                     # distmat_local = re_ranking(local_qf, local_gf, k1=6, k2=3, lambda_value=0.80)
-                    # distmat = 0.95 * distmat_global + (1 - 0.95) * distmat_local
+                    # distmat = 0.96 * distmat_global + (1 - 0.96) * distmat_local
 
                 else:
                     distmat = re_ranking(qf, gf, k1=7, k2=3, lambda_value=0.85)
 
-                path_dist = os.path.join('./model_dist/global_local', 'data')
-                if not os.path.exists(path_dist):
-                    os.makedirs(path_dist)
-                print('Distmat_Shape', distmat.shape)
-                np.save(os.path.join(path_dist, 'dist.npy'), distmat)
-                print("Save Npy Done")
+                # path_dist = os.path.join('./model_dist/global_local', 'data')
+                # if not os.path.exists(path_dist):
+                #     os.makedirs(path_dist)
+                # print('Distmat_Shape', distmat.shape)
+                # np.save(os.path.join(path_dist, 'dist.npy'), distmat)
+                # print("Save Npy Done")
+                self.write_json_results_2(
+                    distmat,
+                    self.datasets,
+                    save_dir=osp.join('./new_experiment/json_output',
+                                      'writerank_nrtireid'),
+                    topk=200,
+                    cat_num=0
+                )
+
         else:
             print('Entering Concated')
             # distmat_1 = np.load('./model_dist/global_local/diedai/dist.npy')
