@@ -1,5 +1,5 @@
-# PCB (no data aug)
-## E1: erase(0.3)+aug
+# PCB 
+## E1: erase(0.3)+augmix+no data aug
 ## base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
