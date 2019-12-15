@@ -18,6 +18,40 @@ from .aligned_reranking import aligned_re_ranking
 import gc
 
 
+def normalize(self, nparray, order=2, axis=0):
+    """Normalize a N-D numpy array along the specified axis."""
+    norm = np.linalg.norm(nparray, ord=order, axis=axis, keepdims=True)
+    return nparray / (norm + np.finfo(np.float32).eps)
+
+
+def compute_dist(array1, array2, type='euclidean'):
+    """Compute the euclidean or cosine distance of all pairs.
+    Args:
+      array1: numpy array with shape [m1, n]
+      array2: numpy array with shape [m2, n]
+      type: one of ['cosine', 'euclidean']
+    Returns:
+      numpy array with shape [m1, m2]
+    """
+    assert type in ['cosine', 'euclidean']
+    if type == 'cosine':
+        array1 = self.normalize(array1, axis=1)
+        array2 = self.normalize(array2, axis=1)
+        dist = np.matmul(array1, array2.T)
+        return dist
+    else:
+        # shape [m1, 1]
+        square1 = np.sum(np.square(array1), axis=1)[..., np.newaxis]
+        # shape [1, m2]
+        square2 = np.sum(np.square(array2), axis=1)[np.newaxis, ...]
+        squared_dist = - 2 * np.matmul(array1, array2.T) + square1 + square2
+        squared_dist[squared_dist < 0] = 0
+        dist = np.sqrt(squared_dist)
+        del square1, square2, squared_dist
+        gc.collect()
+        return dist
+
+
 class R1_mAP(Metric):
     def __init__(self, num_query, aligned_test, datasets, max_rank=50, feat_norm='yes'):
         super(R1_mAP, self).__init__()
@@ -30,12 +64,18 @@ class R1_mAP(Metric):
 
     def reset(self):
         self.feats = []
+        self.local_feats = []
+        self.feats_flip = []
+        self.local_feats_flip = []
         self.pids = []
         self.camids = []
 
     def update(self, output):
-        feat, pid, camid = output
+        feat, local_feat, feat_flip, local_feat_flip, pid, camid = output
         self.feats.append(feat)
+        self.local_feats.append(local_feat)
+        self.feats_flip.append(feat_flip)
+        self.local_feats_flip.append(local_feat_flip)
         self.pids.extend(np.asarray(pid))
         self.camids.extend(np.asarray(camid))
 
@@ -109,22 +149,33 @@ class R1_mAP(Metric):
 
     def compute(self):
         feats = torch.cat(self.feats, dim=0)
+        local_feats = torch.cat(self.local_feats, dim=0)
         if self.feat_norm == 'yes':
             print("The test feature is normalized")
             feats = torch.nn.functional.normalize(feats, dim=1, p=2)
+            local_feats = torch.nn.functional.normalize(local_feats, dim=1, p=2)
         # query
         qf = feats[:self.num_query]
+        local_qf = local_feats[:self.num_query]
         q_pids = np.asarray(self.pids[:self.num_query])
         q_camids = np.asarray(self.camids[:self.num_query])
         # gallery
         gf = feats[self.num_query:]
+        local_gf = local_feats[self.num_query:]
         g_pids = np.asarray(self.pids[self.num_query:])
         g_camids = np.asarray(self.camids[self.num_query:])
         m, n = qf.shape[0], gf.shape[0]
-        distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
+        distmat_global = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
                   torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-        distmat.addmm_(1, -2, qf, gf.t())
-        distmat = distmat.cpu().numpy()
+        distmat_global.addmm_(1, -2, qf, gf.t())
+        distmat_global = distmat_global.cpu().numpy()
+
+        distmat_local = torch.pow(local_qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
+                  torch.pow(local_gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
+        distmat_local.addmm_(1, -2, local_qf, local_gf.t())
+        distmat_local = distmat_local.cpu().numpy()
+        distmat = 0.96 * distmat_global + (1 - 0.96) * distmat_local
+
         # self.write_json_results(
         #     distmat,
         #     self.datasets,
@@ -145,32 +196,49 @@ class R1_mAP_reranking_training(Metric):
 
     def reset(self):
         self.feats = []
+        self.local_feats = []
+        self.feats_flip = []
+        self.local_feats_flip = []
         self.pids = []
         self.camids = []
 
     def update(self, output):
-        feat, pid, camid = output
+        feat, local_feat, feat_flip, local_feat_flip, pid, camid = output
         self.feats.append(feat)
+        self.local_feats.append(local_feat)
+        self.feats_flip.append(feat_flip)
+        self.local_feats_flip.append(local_feat_flip)
         self.pids.extend(np.asarray(pid))
         self.camids.extend(np.asarray(camid))
 
     def compute(self):
         feats = torch.cat(self.feats, dim=0)
+        feats_flip = torch.cat(self.feats_flip, dim=0)
+        feats = torch.cat((feats, feats_flip), 1)
+        local_feats = torch.cat(self.local_feats, dim=0)
+        local_feats_flip = torch.cat(self.local_feats_flip, dim=0)
+        local_feats = torch.cat((local_feats, local_feats_flip), 1)
         if self.feat_norm == 'yes':
             print("The test feature is normalized")
             feats = torch.nn.functional.normalize(feats, dim=1, p=2)
+            local_feats = torch.nn.functional.normalize(local_feats, dim=1, p=2)
 
         # query
         qf = feats[:self.num_query]
+        local_qf = local_feats[:self.num_query]
         q_pids = np.asarray(self.pids[:self.num_query])
         q_camids = np.asarray(self.camids[:self.num_query])
         # gallery
         gf = feats[self.num_query:]
+        local_gf = local_feats[self.num_query:]
         g_pids = np.asarray(self.pids[self.num_query:])
         g_camids = np.asarray(self.camids[self.num_query:])
 
         print("Enter reranking")
-        distmat = re_ranking(qf, gf, k1=6, k2=4, lambda_value=0.85)
+        distmat_global = re_ranking(qf, gf, k1=6, k2=3, lambda_value=0.8)
+        distmat_local = re_ranking(local_qf, local_gf, k1=6, k2=3, lambda_value=0.8)
+        distmat = 0.96 * distmat_global + (1 - 0.96) * distmat_local
+
         cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
 
         return cmc, mAP
