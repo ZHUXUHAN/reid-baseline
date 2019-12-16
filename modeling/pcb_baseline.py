@@ -14,6 +14,7 @@ from .backbones.resnet import ResNet, BasicBlock, Bottleneck
 from .backbones.components.attention import PAM_Module, CAM_Module
 # from .backbones.senet import SENet, SEResNetBottleneck, SEBottleneck, SEResNeXtBottleneck
 from .backbones.resnet_ibn_a import resnet50_ibn_a, resnet101_ibn_a, Bottleneck_IBN, IBN
+from .backbones.resnet_sw import resnet50_sw, resnet101_sw
 from .backbones.senet_ibn_a import se_resnet101_ibn_a, SEBottleneck
 from .rpp import RPP
 from .arcface_loss import ArcCos
@@ -160,6 +161,9 @@ class PCBBaseline(nn.Module):
         elif model_name == 'inception':
             self.base = InceptionNet(last_stride)
 
+        elif model_name == 'resnet50_sw':
+            self.base = resnet50_sw(last_stride)
+
         if pretrain_choice == 'imagenet':
             if not os.path.exists(model_path):
                 assert "No The Pretrained Model"
@@ -183,9 +187,18 @@ class PCBBaseline(nn.Module):
         #     nn.BatchNorm2d(2048))
         # self.base.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
+        # self.backbone = nn.Sequential(
+        #     self.base.conv1,
+        #     self.base.bn1,
+        #     self.base.relu,
+        #     self.base.maxpool,
+        #     self.base.layer1,
+        #     self.base.layer2,
+        #     self.base.layer3,
+        # )
         self.backbone = nn.Sequential(
             self.base.conv1,
-            self.base.bn1,
+            self.base.norm1,
             self.base.relu,
             self.base.maxpool,
             self.base.layer1,
@@ -193,13 +206,15 @@ class PCBBaseline(nn.Module):
             self.base.layer3,
         )
 
-        self.res_local_conv5 = copy.deepcopy(self.base.layer4)
         self.res_global_conv5 = self.base.layer4  # global 2倍下采样
-        self.res_local_conv5[0].conv2 = nn.Conv2d(
-            512, 512, kernel_size=3, bias=False, stride=1, padding=1)
-        self.res_local_conv5[0].downsample = nn.Sequential(
-            nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm2d(2048))
+        self.res_local_conv5 = copy.deepcopy(self.base.layer4)
+        # self.res_local_conv5[0].conv2 = nn.Conv2d(
+        #     512, 512, kernel_size=3, bias=False, stride=1, padding=1)
+        # self.res_local_conv5[0].downsample = nn.Sequential(
+        #     nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
+        #     nn.BatchNorm2d(2048))
+        self.res_local_conv5[0].downsample[0].stride = (1, 1)
+        self.res_local_conv5[0].conv2.stride = (1, 1)
 
         # self.stn = STN()
 
@@ -285,30 +300,6 @@ class PCBBaseline(nn.Module):
         elif self.neck == 'bnneck':
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
-        # x = self.base.conv1(x)
-        # x = self.base.bn1(x)
-        # x = self.base.relu(x)
-        # x = self.base.maxpool(x)
-        # x = self.base.layer1(x)
-        # x = self.base.layer2(x)
-        #
-        # x_ = []
-        # for i in range(self.num_stripes):
-        #     name = 'HIGH' + str(i)
-        #     layer = getattr(self, name)
-        #     x_.append(layer(x))
-        #
-        # x = torch.cat(x_, 0)
-        #
-        # x = self.base.layer3(x)
-        #
-        # x = self.base.layer4(x)
-        # x = self.base.avgpool(x)
-        # x = x.view(x.size(0), -1)
-        #
-        # x = self.pcbfc(x)
-        # num = int(x.size(0) / self.num_stripes)
-        #
         resnet_features = self.res_local_conv5(x)
         # resnet_features_patch = self.patch_proposal(resnet_features)
 
@@ -341,14 +332,11 @@ class PCBBaseline(nn.Module):
                 else:
                     stripe_features_H = self.bottleneck_list[i](
                         local_stripe_features_H.squeeze(-1))  # normalize for angular softmax
-            features_H.append(stripe_features_H.squeeze())
+            features_H.append(local_stripe_features_H.squeeze())
 
         if self.training:
             # [N, C=num_classes]
             logits_list = [self.fc_list[i](features_H[i]) for i in range(self.num_stripes)]
-            # logits_list = [self.fc_list[i](x[i * num:(i + 1) * num, :])
-            #                for i in range(self.num_stripes)]
-
             features_H = torch.cat((features_H[0], features_H[1], features_H[2], features_H[3], features_H[4], \
                                     features_H[5]), 1)
 
