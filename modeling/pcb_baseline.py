@@ -23,6 +23,7 @@ from .patchgenerator import PatchGenerator
 from .batchdrop import BatchDrop
 from .classblock import ClassBlock
 from .stn import STN
+from .pcb_high import HighDivModule
 
 
 def weights_init_kaiming(m):
@@ -161,7 +162,7 @@ class PCBBaseline(nn.Module):
 
         if pretrain_choice == 'imagenet':
             if not os.path.exists(model_path):
-               assert "No The Pretrained Model"
+                assert "No The Pretrained Model"
             self.base.load_param(model_path)
             print('Loading pretrained ImageNet model......')
 
@@ -171,13 +172,32 @@ class PCBBaseline(nn.Module):
         self.neck = neck
         self.neck_feat = neck_feat
         # #PatchGenerator
-        self.patch_proposal = PatchGenerator()
-        self.part_maxpool = nn.AdaptiveMaxPool2d((1, 1))
+        # self.patch_proposal = PatchGenerator()
+        # self.part_maxpool = nn.AdaptiveMaxPool2d((1, 1))
         # self.batch_crop = BatchDrop(1, 0.05)
 
-        self.base.layer4[0].conv2 = nn.Conv2d(
+        # self.base.layer4[0].conv2 = nn.Conv2d(
+        #     512, 512, kernel_size=3, bias=False, stride=1, padding=1)
+        # self.base.layer4[0].downsample = nn.Sequential(
+        #     nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
+        #     nn.BatchNorm2d(2048))
+        # self.base.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+        self.backbone = nn.Sequential(
+            self.base.conv1,
+            self.base.bn1,
+            self.base.relu,
+            self.base.maxpool,
+            self.base.layer1,
+            self.base.layer2,
+            self.base.layer3,
+        )
+
+        self.res_local_conv5 = copy.deepcopy(self.base.layer4)
+        self.res_global_conv5 = self.base.layer4  # global 2倍下采样
+        self.res_local_conv5[0].conv2 = nn.Conv2d(
             512, 512, kernel_size=3, bias=False, stride=1, padding=1)
-        self.base.layer4[0].downsample = nn.Sequential(
+        self.res_local_conv5[0].downsample = nn.Sequential(
             nn.Conv2d(1024, 2048, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(2048))
 
@@ -212,9 +232,17 @@ class PCBBaseline(nn.Module):
             local_conv = nn.Sequential(
                 nn.Conv1d(2048, self.hidden_dim, kernel_size=1),
                 nn.BatchNorm2d(self.hidden_dim),
-                nn.ReLU(inplace=True))
+                # nn.ReLU(inplace=True))
+                nn.LeakyReLU(0.1))
             local_conv.apply(weights_init_kaiming)
             self.local_conv_list.append(local_conv)
+
+        # for i in range(self.num_stripes):
+        #     name = 'HIGH' + str(i)
+        #     setattr(self, name, HighDivModule(512, i + 1))
+
+        # self.pcbfc = nn.Sequential(nn.Linear(2048, 256), nn.BatchNorm1d(256))
+        # self.pcbfc.apply(weights_init_kaiming)
 
         # Classifier for each stripe
         self.fc_list = nn.ModuleList()
@@ -248,8 +276,8 @@ class PCBBaseline(nn.Module):
                 self.bottleneck_list.append(bottleneck)
 
     def forward(self, x, label):
-        # x = self.stn(x)  #### stn
-        global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
+        x = self.backbone(x)
+        global_feat = self.gap(self.res_global_conv5(x))  # (b, 2048, 1, 1)
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
         if self.neck == 'no':
@@ -257,22 +285,47 @@ class PCBBaseline(nn.Module):
         elif self.neck == 'bnneck':
             feat = self.bottleneck(global_feat)  # normalize for angular softmax
 
-        resnet_features = self.base(x)
-        resnet_features_patch = self.patch_proposal(resnet_features)
+        # x = self.base.conv1(x)
+        # x = self.base.bn1(x)
+        # x = self.base.relu(x)
+        # x = self.base.maxpool(x)
+        # x = self.base.layer1(x)
+        # x = self.base.layer2(x)
+        #
+        # x_ = []
+        # for i in range(self.num_stripes):
+        #     name = 'HIGH' + str(i)
+        #     layer = getattr(self, name)
+        #     x_.append(layer(x))
+        #
+        # x = torch.cat(x_, 0)
+        #
+        # x = self.base.layer3(x)
+        #
+        # x = self.base.layer4(x)
+        # x = self.base.avgpool(x)
+        # x = x.view(x.size(0), -1)
+        #
+        # x = self.pcbfc(x)
+        # num = int(x.size(0) / self.num_stripes)
+        #
+        resnet_features = self.res_local_conv5(x)
+        # resnet_features_patch = self.patch_proposal(resnet_features)
 
         # [N, C, H, W]
         assert resnet_features.size(
-            2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides, and the feature shape is {}'.format(resnet_features.shape)
+            2) % self.num_stripes == 0, 'Image height cannot be divided by num_strides, and the feature shape is {}'.format(
+            resnet_features.shape)
         features_G = self.avgpool(resnet_features)
         if self.dropout and self.training:
             features_G = self.dropout_layer(features_G)  # dropout only used in training
         # [N, C=256, H=S, W=1]
         features_H = []
         for i in range(self.num_stripes):
-            stripe_features_H = F.adaptive_avg_pool2d(resnet_features_patch[i], (1, 1)).squeeze(-1)
+            # stripe_features_H = F.adaptive_avg_pool2d(resnet_features_patch[i], (1, 1)).squeeze(-1)
             # print(features_G[:, :, i, :].shape)
             stripe_features_H_conv = self.local_conv_list[i][0](
-                stripe_features_H)#
+                features_G[:, :, i, :])  #
             local_stripe_features_H = self.local_conv_list[i][1:](
                 stripe_features_H_conv.unsqueeze(-1))
             if self.sum:
@@ -288,30 +341,29 @@ class PCBBaseline(nn.Module):
                 else:
                     stripe_features_H = self.bottleneck_list[i](
                         local_stripe_features_H.squeeze(-1))  # normalize for angular softmax
-            if self.training:
-                features_H.append(local_stripe_features_H.squeeze())
-            else:
-                features_H.append(local_stripe_features_H.squeeze())
+            features_H.append(stripe_features_H.squeeze())
 
         if self.training:
             # [N, C=num_classes]
-            batch_size = x.size(0)
-            logits_list = [self.fc_list[i](features_H[i].view(batch_size, -1))
-                           for i in range(self.num_stripes)]
-            features_H = torch.stack(features_H, dim=2)
-            features_H = features_H.view(features_H.size(0), -1)
+            logits_list = [self.fc_list[i](features_H[i]) for i in range(self.num_stripes)]
+            # logits_list = [self.fc_list[i](x[i * num:(i + 1) * num, :])
+            #                for i in range(self.num_stripes)]
+
+            features_H = torch.cat((features_H[0], features_H[1], features_H[2], features_H[3], features_H[4], \
+                                    features_H[5]), 1)
 
             if self.arc:
                 cls_score = self.arcface(feat, label)
             else:
-                cls_score = self.classifier(feat)
+                cls_score = self.classifier(feat)  # for training , only the id-loss use bnneck
             # global_score global_ft part_score part_ft
             return cls_score, global_feat, logits_list, features_H
         else:
             if self.neck_feat == 'after':
-                # print("Test with feature after BN") # torch.stack(features_H, dim=2)
-                return feat, torch.cat((features_H[0], features_H[1], features_H[2], features_H[3], features_H[4], \
+                features_H = torch.cat((features_H[0], features_H[1], features_H[2], features_H[3], features_H[4], \
                                         features_H[5]), 1)
+                # print("Test with feature after BN") # torch.stack(features_H, dim=2)
+                return feat, features_H
             else:
                 # print("Test with feature before BN")
                 return global_feat, torch.stack(features_H, dim=2)
