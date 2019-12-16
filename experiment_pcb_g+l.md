@@ -16,7 +16,7 @@
  |100|85.9|85.4|
 
 
-### E2: erase(0.3)+augmix+no data aug+local_reslayer5
+### E2: no erase+augmix+no data aug+local_reslayer5
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
@@ -33,7 +33,25 @@
  |110|86.0|85.4|
  |120|86.0|85.1|
  
-### E3: erase(0.3)+no augmix+no data aug+local_reslayer5
+
+### E3: erase(0.3)+augmix+no data aug+local_reslayer5
+### base_lr:0.00035 steps:[40,70] warmup_iters:10
+|Epoch|Map|Rank1|
+ |:------:|:------:|:------:|
+ |10|78.5|79.5|
+ |20|80.9|80.6|
+ |30|82.4|81.2|
+ |40|85.2|84.4|
+ |50|86.1|85.6|
+ |60|86.0|84.8|
+ |70|85.9|85.4|
+ |80|86.0|85.5|
+ |90|86.1|85.5|
+ |100|85.9|85.4|
+ |110|86.0|85.4|
+ |120|86.0|85.1|
+ 
+### E4: erase(0.3)+no augmix+no data aug+local_reslayer5
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
@@ -48,7 +66,7 @@
  |90|85.9|85.1|
  |100|86.0|85.2|
 
-### E4: erase(0.3)+no augmix+no data aug+local_reslayer5+pathgenerator
+### E5: erase(0.3)+no augmix+no data aug+local_reslayer5+pathgenerator
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
@@ -65,7 +83,7 @@
  |110|85.6|85.2|
  |120|85.5|84.7|
 
-### E5: erase(0.3)+no augmix+no data aug+local_reslayer5+r+local_idloss_weight(1.2)+dismat_global_weight(0.95)
+### E6: erase(0.3)+no augmix+no data aug+local_reslayer5+r+local_idloss_weight(1.2)+dismat_global_weight(0.95)
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
