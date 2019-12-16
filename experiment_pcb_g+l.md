@@ -34,8 +34,8 @@
  |110|86.0|85.4|
  |120|86.0|85.1|
  
-## E3: erase(0.3)+no augmix+no data aug+local_reslayer5
-## base_lr:0.00035 steps:[40,70] warmup_iters:10
+### E3: erase(0.3)+no augmix+no data aug+local_reslayer5
+### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
  |10|79.0|79.2|
