@@ -1,6 +1,6 @@
 # PCB(Global+Local)
 
-### E1: no erase+no augmix+no data aug+no local_reslayer5 [baseline]
+### E1: [baseline] no erase+no augmix+no data aug+no local_reslayer5 
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
