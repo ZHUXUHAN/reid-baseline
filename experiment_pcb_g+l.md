@@ -16,7 +16,7 @@
  |100|85.9|85.4|
 
 
-### E2: no erase+augmix+no data aug+local_reslayer5
+### E2: no_erase+no augmix+no data aug+local_reslayer5
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
