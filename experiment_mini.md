@@ -17,7 +17,7 @@
  |110|82.9|94.6|
  |120|82.9|94.6|
 
-## E1:erase(0.3)+no-bnneck+res-layers5+no dataaug
+## E1:erase(0.3)+augmix+no-bnneck+res-layers5+no dataaug
 ## base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
