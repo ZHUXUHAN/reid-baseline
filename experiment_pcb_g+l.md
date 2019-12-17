@@ -1,6 +1,23 @@
 # PCB(Global+Local)
 
-### baseline: no erase+no augmix+no data aug+local_reslayer5+no_bnneck
+### baseline: no erase+no augmix+no data aug+no local_reslayer5+no_bnneck
+### base_lr:0.00035 steps:[40,70] warmup_iters:10
+|Epoch|Map|Rank1|
+ |:------:|:------:|:------:|
+ |10|78.9|79.2|
+ |20|79.9|79.7|
+ |30|83.6|83.2|
+ |40|85.5|84.6|
+ |50|85.6|84.5|
+ |60|85.4|84.3|
+ |70|85.4|84.4|
+ |80|85.4|84.3|
+ |90|85.3|84.3|
+ |100|85.4|84.5|
+ |110|85.1|84.2|
+ |120|85.2|84.2|
+ 
+### E1: no erase+no augmix+no data aug+local_reslayer5+no_bnneck
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
@@ -17,7 +34,7 @@
  |110|85.1|84.2|
  |120|85.2|84.2|
 
-### E1: no erase+no augmix+no data aug+no local_reslayer5 
+### E2: no erase+no augmix+no data aug+no local_reslayer5 
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
@@ -29,7 +46,7 @@
  |60|84.8|83.8|
  |70|84.6|84.0|
 
-### E2: no_erase+no augmix+no data aug+local_reslayer5
+### E3: no_erase+no augmix+no data aug+local_reslayer5
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
@@ -44,7 +61,7 @@
  |90|85.7|85.1|
  |100|85.6|85.0|
  
-### E3: erase(0.3)+no augmix+no data aug+local_reslayer5
+### E4: erase(0.3)+no augmix+no data aug+local_reslayer5
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
@@ -60,7 +77,7 @@
  |100|86.0|85.2|
 
 
-### E4: erase(0.3)+augmix+no data aug+local_reslayer5
+### E5: erase(0.3)+augmix+no data aug+local_reslayer5
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
@@ -77,7 +94,7 @@
  |110|86.0|85.4|
  |120|86.0|85.1|
  
-### E5: erase(0.3)+no augmix+no data aug+local_reslayer5+pathgenerator
+### E6: erase(0.3)+no augmix+no data aug+local_reslayer5+pathgenerator
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
@@ -94,7 +111,7 @@
  |110|85.6|85.2|
  |120|85.5|84.7|
 
-### E6: erase(0.3)+no augmix+no data aug+local_reslayer5+r+local_idloss_weight(1.2)+dismat_global_weight(0.95)
+### E7: erase(0.3)+no augmix+no data aug+local_reslayer5+r+local_idloss_weight(1.2)+dismat_global_weight(0.95)
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
