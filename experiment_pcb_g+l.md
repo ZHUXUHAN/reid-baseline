@@ -1,16 +1,21 @@
 # PCB(Global+Local)
 
-### baseline: no erase+no augmix+no data aug+no local_reslayer5+no_bnneck
+### baseline: no erase+no augmix+no data aug+local_reslayer5+no_bnneck
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
 |Epoch|Map|Rank1|
  |:------:|:------:|:------:|
- |10|79.4|79.0|
- |20|81.4|80.9|
+ |10|78.9|79.2|
+ |20|79.9|79.7|
  |30|83.6|83.2|
- |40|84.9|84.2|
- |50|84.9|84.3|
- |60|84.8|83.8|
- |70|84.6|84.0|
+ |40|85.5|84.6|
+ |50|85.6|84.5|
+ |60|85.4|84.3|
+ |70|85.4|84.4|
+ |80|85.4|84.3|
+ |90|85.3|84.3|
+ |100|85.4|84.5|
+ |110|85.1|84.2|
+ |120|85.2|84.2|
 
 ### E1: no erase+no augmix+no data aug+no local_reslayer5 
 ### base_lr:0.00035 steps:[40,70] warmup_iters:10
