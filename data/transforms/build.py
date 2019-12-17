@@ -7,6 +7,7 @@
 import torchvision.transforms as T
 
 from .transforms import RandomErasing, RandomResize
+from .augmix import AugMix
 
 
 def build_transforms(cfg, is_train=True):
@@ -18,9 +19,10 @@ def build_transforms(cfg, is_train=True):
             T.Resize(cfg.INPUT.SIZE_TRAIN),
             T.RandomHorizontalFlip(p=cfg.INPUT.PROB),
             # RandomResize(384, 128),
-#             T.RandomAffine(degrees=0, translate=(0.05, 0.05), fillcolor=PIXEL_MEAN),
+            # T.RandomAffine(degrees=0, translate=(0.05, 0.05), fillcolor=PIXEL_MEAN),
             T.Pad(cfg.INPUT.PADDING),
             T.RandomCrop(cfg.INPUT.SIZE_TRAIN),
+            # AugMix(prob=0.5),
             T.ToTensor(),
             normalize_transform,
             RandomErasing(probability=cfg.INPUT.RE_PROB, mean=PIXEL_MEAN),
