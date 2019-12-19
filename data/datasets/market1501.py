@@ -72,9 +72,8 @@ class Market1501(BaseImageDataset):
             pid_container.add(pid)
         pid2label = {pid: label for label, pid in enumerate(pid_container)}
 
-#         pid_less4 = self.parse_data_file('./data/samplers/number_newtrain_less4.txt')
-#         pid_more4less10 = self.parse_data_file('./data/samplers/number_more4less10.txt')
-#         pid_lsee100 = self.parse_data_file('./data/samplers/number.txt')
+        pids_less4 = self.parse_data_file('./data/samplers/less_4.txt')
+        pids_less_20_more_4 = self.parse_data_file('./data/samplers/less_20_more_4.txt')
 
         dataset = []
         for img_path in img_paths:
@@ -86,12 +85,12 @@ class Market1501(BaseImageDataset):
             if relabel: pid = pid2label[pid]
             dataset.append((img_path, pid, camid))
 
-#             if pid in pid_lsee100 and pid not in pid_less4:
-#                 dataset.append((img_path, pid, camid))
-#             if pid in pid_less4:
-#                 dataset.append((img_path, pid, camid))
-#                 dataset.append((img_path, pid, camid))
-#                 dataset.append((img_path, pid, camid))
+            if pid in pids_less4 and pid not in pid_less20_more_4:
+                dataset.append((img_path, pid, camid))
+            if pid in pid_less4:
+                dataset.append((img_path, pid, camid))
+                dataset.append((img_path, pid, camid))
+                dataset.append((img_path, pid, camid))
         return dataset
 
     def parse_data_file(self, data_path):
