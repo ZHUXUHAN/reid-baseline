@@ -32,10 +32,10 @@ class RandomIdentitySampler(Sampler):
         self.num_pids_per_batch = self.batch_size // self.num_instances
         self.index_dic = defaultdict(list)
 
-        self._pids_less100 = self.parse_data_file('./data/samplers/number_less100.txt')
-        self._pids_more100 = self.parse_data_file('./data/samplers/number_more100.txt')
-        self._pid_less4 = self.parse_data_file('./data/samplers/number_less4.txt')
-        self._pid_more4less10 = self.parse_data_file('./data/samplers/number_more4less10.txt')
+#         self._pids_less100 = self.parse_data_file('./data/samplers/number_less100.txt')
+#         self._pids_more100 = self.parse_data_file('./data/samplers/number_more100.txt')
+#         self._pid_less4 = self.parse_data_file('./data/samplers/number_less4.txt')
+#         self._pid_more4less10 = self.parse_data_file('./data/samplers/number_more4less10.txt')
         
         for index, (_, pid, _) in enumerate(self.data_source):
             if pid in self._pids_less100:
