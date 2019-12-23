@@ -345,6 +345,11 @@ def inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank
 
 
 def merge_npy(npy_paths):
+    '''
+    需要自动化调整这个函数的写法
+    :param npy_paths: 包含所有npypath的list
+    :return:
+    '''
     npy_dist_1 = np.load(npy_paths[0])
     npy_dist_2 = np.load(npy_paths[1])
     distmat = npy_dist_1+npy_dist_2
