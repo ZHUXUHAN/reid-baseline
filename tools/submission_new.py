@@ -87,48 +87,66 @@ def get_model(traindata_num_classes, modelname):
     return model
 
 
-def write_json(dist, query_name, gallery_name):
-    rank = np.argsort(dist)
-    rank0 = rank[:, 0]
-    print(len(rank0))
-    print(len(set(rank0)))
+def write_json(dist, query_name, gallery_name, save_dir='', topk=10):
+    if not osp.exists(save_dir):
+        os.makedirs(save_dir)
+    num_q, num_g = dist.shape
+
+    print(dist.shape)
+
+    print('# query: {}\n# gallery {}'.format(num_q, num_g))
+    print('Writing top-{} ranks ...'.format(topk))
+
+    num_query, num_gallery = dist.shape
+    print(dist.shape)
+    dist_line = dist.reshape(-1)
+    print(dist_line.shape)
+    dist_sorted_indices = np.argsort(dist_line)
+    flags = np.zeros(len(gallery_name))
+    result = {}
+    for i in range(len(dist)):
+        qimg_path, qpid, qcamid = query_name[i]
+        qimg_name = self.parse_filename(osp.basename(qimg_path))
+        result[qimg_name] = []
     dist_cp = dist.copy()
     dist_cp.sort(1)
     dist_r1 = dist_cp[:, 0]
     rank1 = np.argsort(dist_r1)
     dist_r1.sort()
-    print(dist_r1)
-    print(dist[rank1[1]][rank0[rank1[1]]])
-    flags = np.zeros(len(gallery_name))
-    result = {}
-    thr = dist_r1[int(len(rank1) * 0.72)]
-    ttppmm = np.argsort(dist)
-    for i in range(len(dist)):
-        if i % 50 == 0:
-            print(i)
-            print(sum(flags))
-        query_index = rank1[i]
-        gallery_list = ttppmm[query_index]
-        dist_i = dist[query_index]
-        result[query_name[query_index].split(r'/')[-1]] = []
-        num = 0
-        first = True
-        for g in gallery_list:
-            if flags[g] == 1:
-                first = False
-                continue
-            if first:
-                # if i < int(len(query_name)*0.85):
-                flags[g] = 1
-                first = False
-            if dist_i[g] < thr:
-                flags[g] = 1
-            result[query_name[query_index].split(r'/')[-1]].append(gallery_name[g].split(r'/')[-1])
-            num += 1
-            if num == 200:
-                break
-    with open(r'submission_B.json', 'w', encoding='utf-8') as f:
+    thr = dist_r1[int(len(rank1) * 0.72)]  # TODO
+    print(thr)
+    num = 0
+    num_jump = 0
+    for i in tqdm(range(len(dist_sorted_indices))):
+        index_query = dist_sorted_indices[i] // num_gallery
+        index_gallery = dist_sorted_indices[i] % num_gallery
+        d = dist_line[dist_sorted_indices[i]]
+        qimg_path, qpid, qcamid = query_name[index_query]
+        qimg_name = self.parse_filename(osp.basename(qimg_path))
+        gimg_path, gpid, gcamid = gallery_name[index_gallery]
+        gimg_name = self.parse_filename(osp.basename(gimg_path))
+        if d < thr:
+            if flags[index_gallery] == 0:
+                flags[index_gallery] = 1
+                if len(result[qimg_name]) < topk:
+                    num += 1
+                    result[qimg_name].append(gimg_name)
+            else:
+                num_jump += 1
+        else:
+            if flags[index_gallery] == 0:
+                if len(result[qimg_name]) < topk:
+                    num += 1
+                    result[qimg_name].append(gimg_name)
+            else:
+                num_jump += 1
+        if num >= num_query * topk:
+            break
+    print(num)
+    print(num_jump)
+    with open(os.path.join(save_dir, r'submission_second_a.json'), 'w', encoding='utf-8') as f:
         json.dump(result, f)
+    print("Json Save Done")
 
 
 def adjust_rerank(dist_list):
@@ -199,7 +217,7 @@ def compute_qg_dist(all_feature, query_num):
     return q_g_dist, g_g_dist, q_q_dist
 
 
-def inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank):  # 传入模型，数据预处理方法，batch_size
+def inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank, npy_save_path):  # 传入模型，数据预处理方法，batch_size
     query_num = len(query_list)
     model = nn.DataParallel(model)
     model = model.to(device)
@@ -323,17 +341,17 @@ def inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank
         flip_distmat = l_w * flip_distmat_global + (1 - l_w) * flip_distmat_local
 
         distmat = (flip_distmat + distmat) / 2
-        np.save('70epoch.npy', distmat)
+        np.save(npy_save_path, distmat)
 
 
 def merge_npy(npy_paths):
     npy_dist_1 = np.load(npy_paths[0])
     npy_dist_2 = np.load(npy_paths[1])
     distmat = npy_dist_1+npy_dist_2
-    write_json(dist=distmat, query_name=query_list, gallery_name=gallery_list)
+    write_json(dist=distmat, query_name=query_list, gallery_name=gallery_list, save_dir='./', topk=200)
 
 
-def main(traindata_num_classes, modelname, batch_size, merge_npy_paths, adjust_rerank):
+def main(traindata_num_classes, modelname, batch_size, merge_npy_paths, adjust_rerank , npy_save_path):
     if len(merge_npy_paths) > 0:
         merge_npy(merge_npy_paths)
     else:
@@ -346,7 +364,7 @@ def main(traindata_num_classes, modelname, batch_size, merge_npy_paths, adjust_r
                         os.listdir(r'/home/zxh/datasets/NAICReID/clean_bounding_box_test')]
 
         model = get_model(traindata_num_classes, modelname)
-        inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank)
+        inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank, npy_save_path)
 
 
 if __name__ == "__main__":
@@ -355,4 +373,5 @@ if __name__ == "__main__":
     batch_size = 256 * 8
     merge_npy_paths = []
     adjust_rerank = True
-    main(traindata_num_classes, modelname, batch_size, merge_npy_paths, adjust_rerank)
+    npy_save_path = ''
+    main(traindata_num_classes, modelname, batch_size, merge_npy_paths, adjust_rerank, npy_save_path)
