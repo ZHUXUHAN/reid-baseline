@@ -15,8 +15,11 @@ from torchvision import transforms
 # from sklearn.decomposition import PCA
 import torch.nn as nn
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'  # 指定gpu
+os.environ['CUDA_VISIBLE_DEVICES'] = '2,6'  # 指定gpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from config import cfg
+from data import make_data_loader
+import re
 
 
 def normalize(nparray, order=2, axis=0):
@@ -78,10 +81,22 @@ def transform(img):
     return result
 
 
+def compute_qg_dist(all_feature, query_num):
+    gf = all_feature[query_num:]
+    qf = all_feature[:query_num]
+
+    q_g_dist = compute_dist(
+        qf.cpu().detach().numpy(), gf.cpu().detach().numpy(), type='euclidean')
+    g_g_dist = compute_dist(
+        gf.cpu().detach().numpy(), gf.cpu().detach().numpy(), type='euclidean')
+    q_q_dist = compute_dist(
+        qf.cpu().detach().numpy(), qf.cpu().detach().numpy(), type='euclidean')
+    return q_g_dist, q_q_dist, g_g_dist
+
+
 def get_model(traindata_num_classes, modelname):
-    pretrain_path = r"/home/zxh/.cache/torch/checkpoints/r50_ibn_a.pth"
-    # model = AlignedBaseline(traindata_num_classes,1,pretrain_path,'bnneck','before','resnet50_ibn_a','self',gcb=True)
-    model = PCBBaseline(traindata_num_classes, 1, pretrain_path, 'bnneck', 'after', 'resnet50_ibn_a', 'self', 6, False,
+    pretrain_path = r"/home/zxh/reid-baseline/new_experiment/r101_pcb_new/resnext101_ibn_a_model_70.pth"
+    model = PCBBaseline(traindata_num_classes, 1, pretrain_path, 'bnneck', 'after', 'resnext101_ibn_a', 'self', 6, False,
                         False, False, False, False, False)
     model.load_param(modelname)
     return model
@@ -149,7 +164,12 @@ def write_json(dist, query_name, gallery_name, save_dir='', topk=10):
     print("Json Save Done")
 
 
-def adjust_rerank(dist_list):
+def adjust_rerank_function(dist_list, query_pid_list, gallery_pid_list, query_camid_list, gallery_camid_list):
+    q_pids = np.asarray(query_pid_list)
+    g_pids = np.asarray(gallery_pid_list)
+    q_camids = np.asarray(query_camid_list)
+    g_camids = np.asarray(gallery_camid_list)
+
     max = 0
     plist = []
     global_q_g_dist, global_q_q_dist, global_g_g_dist = dist_list[0:3]
@@ -161,63 +181,50 @@ def adjust_rerank(dist_list):
         for k2 in range(3, 5, 1):
             for l in [0.77, 0.78, 0.79, 0.80, 0.81, 0.82, 0.83, 0.84, 0.85, 0.86, 0.87, 0.88]:  #
                 for l_w in [0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97]:
-                    if self.aligned_test or self.pcb_test or self.new_pcb_test:
 
-                        distmat_global = aligned_re_ranking(
-                            global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=k1, k2=k2,
-                            lambda_value=l)
-                        print("Global dismat is computed done")
+                    distmat_global = aligned_re_ranking(
+                        global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=k1, k2=k2,
+                        lambda_value=l)
+                    print("Global dismat is computed done")
 
-                        distmat_local = aligned_re_ranking(
-                            local_q_g_dist, local_q_q_dist, local_g_g_dist, k1=k1, k2=k2,
-                            lambda_value=l)
+                    distmat_local = aligned_re_ranking(
+                        local_q_g_dist, local_q_q_dist, local_g_g_dist, k1=k1, k2=k2,
+                        lambda_value=l)
 
-                        print("Local dismat is computed done")
+                    print("Local dismat is computed done")
 
-                        flip_distmat_global = aligned_re_ranking(
-                            flip_global_q_g_dist, flip_global_q_q_dist, flip_global_g_g_dist, k1=k1, k2=k2,
-                            lambda_value=l)
+                    flip_distmat_global = aligned_re_ranking(
+                        flip_global_q_g_dist, flip_global_q_q_dist, flip_global_g_g_dist, k1=k1, k2=k2,
+                        lambda_value=l)
 
-                        print("Global_flip dismat is computed done")
+                    print("Global_flip dismat is computed done")
 
-                        flip_distmat_local = aligned_re_ranking(
-                            flip_local_q_g_dist, flip_local_q_q_dist, flip_local_g_g_dist, k1=k1, k2=k2,
-                            lambda_value=l)
+                    flip_distmat_local = aligned_re_ranking(
+                        flip_local_q_g_dist, flip_local_q_q_dist, flip_local_g_g_dist, k1=k1, k2=k2,
+                        lambda_value=l)
 
-                        print("Local_flip dismat is computed done")
+                    print("Local_flip dismat is computed done")
 
-                        distmat = l_w * distmat_global + (1 - l_w) * distmat_local
+                    distmat = l_w * distmat_global + (1 - l_w) * distmat_local
 
-                        flip_distmat = l_w * flip_distmat_global + (1 - l_w) * flip_distmat_local
+                    flip_distmat = l_w * flip_distmat_global + (1 - l_w) * flip_distmat_local
 
-                        distmat = (flip_distmat + distmat) / 2
+                    distmat = (flip_distmat + distmat) / 2
 
-                        cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
-                        for r in [1]:
-                            if max < (mAP + cmc[r - 1]) / 2:
-                                max = (mAP + cmc[r - 1]) / 2
-                                plist = [k1, k2, l, mAP, cmc[r - 1]]
-                            print("====k1=%d=====k2=%d=====l=%f=====l_w=%f" % (k1, k2, l, l_w))
-                            print("CMC curve, Rank-%d:%.4f, map:%.4f, final: %.4f" % (
-                                r, cmc[r - 1], mAP, (mAP + cmc[r - 1]) / 2))
+                    cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
+                    for r in [1]:
+                        if max < (mAP + cmc[r - 1]) / 2:
+                            max = (mAP + cmc[r - 1]) / 2
+                            plist = [k1, k2, l, mAP, cmc[r - 1]]
+                        print("====k1=%d=====k2=%d=====l=%f=====l_w=%f" % (k1, k2, l, l_w))
+                        print("CMC curve, Rank-%d:%.4f, map:%.4f, final: %.4f" % (
+                            r, cmc[r - 1], mAP, (mAP + cmc[r - 1]) / 2))
 
     print(plist)
 
 
-def compute_qg_dist(all_feature, query_num):
-    gf = all_feature[query_num:]
-    qf = all_feature[:query_num]
-
-    q_g_dist = compute_dist(
-        qf.cpu().detach().numpy(), gf.cpu().detach().numpy(), type='euclidean')
-    g_g_dist = compute_dist(
-        gf.cpu().detach().numpy(), gf.cpu().detach().numpy(), type='euclidean')
-    q_q_dist = compute_dist(
-        qf.cpu().detach().numpy(), qf.cpu().detach().numpy(), type='euclidean')
-    return q_g_dist, g_g_dist, q_q_dist
-
-
-def inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank, npy_save_path):  # 传入模型，数据预处理方法，batch_size
+def inference_samples(model, batch_size, query_list, gallery_list, query_pid_list, gallery_pid_list, query_camid_list, \
+                          gallery_camid_list, adjust_rerank, npy_save_path):  # 传入模型，数据预处理方法，batch_size
     query_num = len(query_list)
     model = nn.DataParallel(model)
     model = model.to(device)
@@ -232,7 +239,6 @@ def inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank
     local_feature = list()
     flip_all_feature = list()
     flip_local_feature = list()
-    # pca = PCA(n_components=512)
     print("ALL_QUERY_BACTH:", str(iter_n_query))
     for i in range(iter_n_query):
         img_list = list()
@@ -291,28 +297,28 @@ def inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank
     flip_all_feature = torch.cat(flip_all_feature, dim=0)
     flip_local_feature = torch.cat(flip_local_feature, dim=0)
 
-    all_feature = torch.cat((all_feature, flip_all_feature), dim=1)
-    local_feature = torch.cat((local_feature, flip_local_feature), dim=1)
-
+    #Flip Cat
+    # all_feature = torch.cat((all_feature, flip_all_feature), dim=1)
+    # local_feature = torch.cat((local_feature, flip_local_feature), dim=1)
+    ######
+    all_feature = torch.nn.functional.normalize(all_feature, dim=1, p=2)
+    local_feature = torch.nn.functional.normalize(local_feature, dim=1, p=2)
     flip_all_feature = torch.nn.functional.normalize(flip_all_feature, dim=1, p=2)
     flip_local_feature = torch.nn.functional.normalize(flip_local_feature, dim=1, p=2)
 
     global_q_g_dist, global_g_g_dist, global_q_q_dist = compute_qg_dist(all_feature, query_num)
-
     local_q_g_dist, local_g_g_dist, local_q_q_dist = compute_qg_dist(local_feature, query_num)
-
     flip_global_q_g_dist, flip_global_g_g_dist, flip_global_q_q_dist = compute_qg_dist(flip_all_feature, query_num)
-
     flip_local_q_g_dist, flip_local_g_g_dist, flip_local_q_q_dist = compute_qg_dist(flip_local_feature, query_num)
 
     if adjust_rerank:
         dist_list = [global_q_g_dist, global_g_g_dist, global_q_q_dist, local_q_g_dist, local_g_g_dist, local_q_q_dist, \
                       flip_global_q_g_dist, flip_global_g_g_dist, flip_global_q_q_dist, flip_local_q_g_dist,
-                      flip_local_g_g_dist, \
-                      flip_local_q_q_dist]
-        adjust_rerank(dist_list)
+                      flip_local_g_g_dist, flip_local_q_q_dist]
+        adjust_rerank_function(dist_list, query_pid_list, gallery_pid_list, query_camid_list, gallery_camid_list)
     else:
         l_w = 0.95
+        k1, k2, l = 6, 3, 0.80
         distmat_global = aligned_re_ranking(
             global_q_g_dist, global_q_q_dist, global_g_g_dist, k1=k1, k2=k2,
             lambda_value=l)
@@ -367,15 +373,34 @@ def main(traindata_num_classes, modelname, batch_size, merge_npy_paths, adjust_r
         gallery_list = [os.path.join(r'/home/zxh/datasets/NAICReID/clean_bounding_box_test', x) for x in
                         # 测试集gallery文件夹
                         os.listdir(r'/home/zxh/datasets/NAICReID/clean_bounding_box_test')]
+        pattern = re.compile(r'([-\d]+)_c(\d)')
+
+        query_pid_list = []
+        query_camid_list = []
+        for img_path in query_list:
+            pid, camid = map(int, pattern.search(img_path).groups())
+            query_pid_list.append(pid)
+            query_camid_list.append(camid)
+
+        gallery_camid_list = []
+        gallery_pid_list = []
+        for img_path in gallery_list:
+            pid, camid = map(int, pattern.search(img_path).groups())
+            gallery_pid_list.append(pid)
+            gallery_camid_list.append(camid)
 
         model = get_model(traindata_num_classes, modelname)
-        inference_samples(model, batch_size, query_list, gallery_list, adjust_rerank, npy_save_path)
+        inference_samples(model, batch_size, query_list, gallery_list, query_pid_list, gallery_pid_list, query_camid_list, \
+                          gallery_camid_list, adjust_rerank, npy_save_path)
 
 
 if __name__ == "__main__":
+    """
+    需要更换的有 modelname, adjust_rerank 如果不是调整rerank 则需要给出需要融合的 npy_save_path
+    """
     traindata_num_classes = 9968
-    modelname = "/home/zxh/reid-baseline/new_experiment/r50_ibn_pcb/resnet50_ibn_a_model_70.pth"
-    batch_size = 256 * 8
+    modelname = "/home/zxh/reid-baseline/new_experiment/r101_pcb_new/resnext101_ibn_a_model_70.pth"
+    batch_size = 128*2
     merge_npy_paths = []
     adjust_rerank = True
     npy_save_path = ''
