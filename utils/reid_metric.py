@@ -203,7 +203,7 @@ class R1_mAP_reranking_training(Metric):
         self.camids = []
 
     def update(self, output):
-        feat, local_feat, feat_flip, local_feat_flip, pid, camid = output
+         feat, local_feat, pid, camid, feat_flip, local_feat_flip = output = output
         self.feats.append(feat)
         self.local_feats.append(local_feat)
         self.feats_flip.append(feat_flip)
