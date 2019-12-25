@@ -245,8 +245,7 @@ class PCBBaseline(nn.Module):
             local_conv = nn.Sequential(
                 nn.Conv1d(2048, self.hidden_dim, kernel_size=1),
                 nn.BatchNorm2d(self.hidden_dim),
-                # nn.ReLU(inplace=True))
-                nn.LeakyReLU(0.1))
+                nn.ReLU(inplace=True))
             local_conv.apply(weights_init_kaiming)
             self.local_conv_list.append(local_conv)
 
