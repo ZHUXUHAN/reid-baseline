@@ -14,7 +14,6 @@ from .backbones.resnet import ResNet, BasicBlock, Bottleneck
 from .backbones.components.attention import PAM_Module, CAM_Module
 # from .backbones.senet import SENet, SEResNetBottleneck, SEBottleneck, SEResNeXtBottleneck
 from .backbones.resnet_ibn_a import resnet50_ibn_a, resnet101_ibn_a, Bottleneck_IBN, IBN
-from .backbones.resnet_sw import resnet50_sw, resnet101_sw
 from .backbones.senet_ibn_a import se_resnet101_ibn_a, SEBottleneck
 from .rpp import RPP
 from .arcface_loss import ArcCos
@@ -24,7 +23,6 @@ from .patchgenerator import PatchGenerator
 from .batchdrop import BatchDrop
 from .classblock import ClassBlock
 from .stn import STN
-from .pcb_high import HighDivModule
 
 
 def weights_init_kaiming(m):
@@ -153,7 +151,7 @@ class PCBBaseline(nn.Module):
             self.base = resnet50_ibn_a(last_stride, self.gcb, self.cam)
 
         elif model_name == 'resnet101_ibn_a':
-            self.base = resnet101_ibn_a(last_stride, self.gcb)
+            self.base = resnet50_ibn_a(last_stride, self.gcb, self.cam)
 
         elif model_name == 'se_resnet101_ibn_a':
             self.base = se_resnet101_ibn_a(last_stride)
