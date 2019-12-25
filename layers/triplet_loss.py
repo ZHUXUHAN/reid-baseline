@@ -150,8 +150,9 @@ class CrossEntropyLabelSmooth(nn.Module):
 
         if not self.use_focal:
             log_probs = self.logsoftmax(inputs)
-            targets = torch.zeros(log_probs.size()).scatter_(1, targets.unsqueeze(1).data.cpu(), 1)
-            if self.use_gpu: targets = targets.cuda()
+#             targets = torch.zeros(log_probs.size()).scatter_(1, targets.unsqueeze(1).data.cpu(), 1)
+#             if self.use_gpu: targets = targets.cuda()
+            targets = torch.zeros(log_probs.size(), device='cuda').scatter_(1, targets.unsqueeze(1), 1)
             targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
             loss = (- targets * log_probs).mean(0).sum()
         else:
