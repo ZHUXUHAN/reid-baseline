@@ -172,8 +172,10 @@ def create_supervised_evaluator(model, metrics,
         with torch.no_grad():
             data, pids, camids, data_flip = batch
             data = data.to(device) if torch.cuda.device_count() >= 1 else data
-            feat, _ = model(data, None)
-            return feat, pids, camids
+            data_flip = data_flip.to(device) if torch.cuda.device_count() >= 1 else data_flip
+            feat, local_feat = model(data, None)
+            feat_flip, local_feat_flip = model(data_flip, None)
+            return feat, local_feat, pids, camids, feat_flip, local_feat_flip
 
     engine = Engine(_inference)
 
