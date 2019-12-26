@@ -94,7 +94,7 @@ class ResNeXt(nn.Module):
     https://arxiv.org/pdf/1611.05431.pdf
     """
 
-    def __init__(self, last_strid, baseWidth, cardinality, layers, num_classes):
+    def __init__(self, last_stride, baseWidth, cardinality, layers, num_classes):
         """ Constructor
         Args:
             baseWidth: baseWidth for ResNeXt.
@@ -114,11 +114,11 @@ class ResNeXt(nn.Module):
         self.conv1 = nn.Conv2d(3, 64, 7, 2, 3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=last_stride)
         self.avgpool = nn.AvgPool2d(7)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
@@ -166,7 +166,7 @@ class ResNeXt(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        x = self.maxpool1(x)
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -177,6 +177,13 @@ class ResNeXt(nn.Module):
 
         return x
 
+    def load_param(self, model_path):
+        param_dict = torch.load(model_path)
+        for i in param_dict['state_dict']:
+            if 'fc' in i[7:]:
+                continue
+            self.state_dict()[i[7:]].copy_(param_dict['state_dict'][i])
+
 
 def resnext50_ibn_a(last_stride, baseWidth, cardinality):
     """
@@ -186,7 +193,7 @@ def resnext50_ibn_a(last_stride, baseWidth, cardinality):
     return model
 
 
-def resnext101_ibn_a(last_stride, baseWidth, cardinality):
+def resnext101_ibn_a(last_stride, baseWidth=4, cardinality=32):
     """
     Construct ResNeXt-101.
     """
