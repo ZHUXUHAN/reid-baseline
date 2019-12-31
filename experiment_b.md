@@ -1,7 +1,7 @@
 ## se_r101_ibn_a_rank1
 |Map|Rank1|All
  |:------:|:------:|:------:|
- ||||
+ |94.7|97.1|95.9|
 
 ## r101_ibn_a_rank1
 |Map|Rank1|All
