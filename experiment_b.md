@@ -24,7 +24,7 @@
 
 ### ReRank 时间：
 
-## r101_ibn_a_rank1
+## r101_next_ibn_a_rank1
 ### 模型传输时间：下载：46min 上传：5min
 |Map|Rank1|All|
 |:------:|:------:|:------:|
