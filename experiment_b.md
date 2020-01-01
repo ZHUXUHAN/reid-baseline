@@ -7,6 +7,7 @@
 ### 大数据集前向时间（batch_size=256）：23min
 ### 小数据集简单版 write top-200 时间：5min 主要花在sort上
 ### 大数据集简单版 write top-200 时间：5min 主要花在sort上
+### 大json下载时间 
 ### ReRank 调参 (split=4)
 ### 原始： 95.4 97.0
 |k1|k2|l|Map|Rank1|All|
