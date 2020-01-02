@@ -27,6 +27,8 @@
 
 ### 原始ReRank(一半数据)时间：
 ### 新版ReRank(一半数据)时间：
+### 原始ReRank(全数据)时间：
+### 原始ReRank(全数据)时间：
 
 ## r101_next_ibn_a_rank1
 ### 模型传输时间：下载：46min 上传：5min
