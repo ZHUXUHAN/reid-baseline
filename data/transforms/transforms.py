@@ -165,3 +165,28 @@ class RandomResize(object):
         img.paste(patch, (x1, y1))
 
         return img
+   
+class ColorSpaceConvert(object):
+    """ Randomly selects a rectangle region in an image and erases its pixels.
+        'Random Erasing Data Augmentation' by Zhong et al.
+        See https://arxiv.org/pdf/1708.04896.pdf
+    Args:
+         probability: The probability that the Random Erasing operation will be performed.
+         sl: Minimum proportion of erased area against input image.
+         sh: Maximum proportion of erased area against input image.
+         r1: Minimum aspect ratio of erased area.
+         mean: Erasing value.
+    """
+
+    def __init__(self, color_space='rgb', phase='train'):
+        self.color_space = color_space
+        self.phase = phase
+
+    def __call__(self, img):
+        if self.color_space == 'rgb':
+            img = img
+        elif self.color_space == 'define':
+            img = np.asarray(img).astype(np.uint8)
+            new_img = cv2.merge([255 - img[:, :, 0], 255 - img[:, :, 1], img[:, :, 2]]).astype(np.uint8)
+            img = Image.fromarray(new_img)
+        return img
