@@ -15,6 +15,11 @@ from ignite.metrics import RunningAverage
 from utils.reid_metric import R1_mAP
 from utils.reid_metric import R1_mAP_reranking_training
 
+from apex.parallel import DistributedDataParallel as DDP
+from apex.fp16_utils import *
+from apex import amp, optimizers
+from apex.multi_tensor_apply import multi_tensor_applier
+
 global ITER
 ITER = 0
 
@@ -95,6 +100,7 @@ def create_supervised_trainer_with_center(model, center_criterion, optimizer, op
         if torch.cuda.device_count() > 1:
             model = nn.DataParallel(model)
         model.to(device)
+        model, optimizer = amp.initialize(model, optimizer,opt_level='O1')
 
     def _update(engine, batch):
         model.train()
@@ -130,6 +136,9 @@ def create_supervised_trainer_with_center(model, center_criterion, optimizer, op
 
         # print("Total loss is {}, center loss is {}".format(loss, center_criterion(feat, target)))
         loss.backward()
+        #if you use fp16 please use follwing codes
+#         with amp.scale_loss(loss, optimizer) as scaled_loss:
+#             scaled_loss.backward()
         optimizer.step()
         for param in center_criterion.parameters():
             param.grad.data *= (1. / cetner_loss_weight)
