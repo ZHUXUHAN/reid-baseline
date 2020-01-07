@@ -23,6 +23,7 @@ def build_transforms(cfg, is_train=True):
             T.Pad(cfg.INPUT.PADDING),
             T.RandomCrop(cfg.INPUT.SIZE_TRAIN),
             # AugMix(prob=0.5),
+            RandomPatch(prob_happen=cfg.INPUT.RANDOM_PATCH_PROB, patch_max_area=0.16),
             T.ToTensor(),
             normalize_transform,
             RandomErasing(probability=cfg.INPUT.RE_PROB, mean=PIXEL_MEAN),
