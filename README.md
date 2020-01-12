@@ -8,3 +8,6 @@ part1是anew.zip，part2是anew.z01，part3是anew.z02，三个文件放在同�
 ## 压缩命令
   压缩文件夹： zip -r fiile.zip file_dir_path
   压缩文件： zip file.zip file_path
+
+
+## How to use this project
